@@ -1,0 +1,35 @@
+*** How to setup your Bazaar to work with updated codes
+
+This file explains how to setup Bazaar and work with updated versions of the code.
+
+Summary
+1. Setup Bazaar
+2. 
+
+
+*** How to setup the shared repository ***
+1. Initialize/create the shared repository
+bzr init-repo sftp://meas@emma.inrim.it/~/src/Python/Fitting.repo/SloppyScaling.main
+[meas@emma.inrim.it's password: 
+Shared repository with trees (format: pack-0.92)
+Location:
+  shared repository: sftp://meas@emma.inrim.it/%7E/src/Python/Fitting.repo/SloppyScaling.main/]
+
+2. Create the trunk branch
+bzr init sftp://meas@emma.inrim.it/~/src/Python/Fitting.repo/SloppyScaling.main/trunk
+[meas@emma.inrim.it's password: 
+Repository branch (format: pack-0.92)
+Location:
+  shared repository: sftp://meas@emma.inrim.it/%7E/src/Python/Fitting.repo/SloppyScaling.main/
+  repository branch: sftp://meas@emma.inrim.it/%7E/src/Python/Fitting.repo/SloppyScaling.main/trunk/]
+
+3. Checkout (locally) the trunk branch
+I first setup my local main directory (Sloppy.main) of the repository
+mkdir /home/gf/src/Python/Fitting.repo/Sloppy.main
+
+then I checkout the trunk branch into a new directory I call trunk
+
+bzr checkout sftp://meas@emma.inrim.it/~/src/Python/Fitting.repo/SloppyScaling.main/trunk trunk
+
+so now I have a new directory 
+/home/gf/src/Python/Fitting.repo/Sloppy.main/trunk
