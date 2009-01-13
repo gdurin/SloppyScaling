@@ -5,6 +5,7 @@ from scipy import exp
 # Includes dataDirectory, independentNames, independentValues,
 # and Symbol, Color dictionaries
 import WindowScalingInfo as WS
+reload(WS)
 
 name = 'Awk'
 Ytheory = "(w*k**sigma_k)**((2.-tau)*(1.+zeta))\
@@ -35,7 +36,7 @@ theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 scalingYTeX = scalingYTeX, \
                 title = title, \
                 scalingTitle = scalingTitle, \
-                Xname=Xname, Yname=Yname, normalize = True)
+                Xname=Xname, Yname=Yname, normalization = WS.normalization)
 
 data = SloppyScaling.Data()
 for k in WS.independentValues:

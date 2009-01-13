@@ -34,7 +34,7 @@ class ScalingTheory:
                  scalingXTeX = r'${\cal{X}}$', \
                  scalingYTeX = r'${\cal{Y}}$', \
                  title = 'Fit', scalingTitle = 'Scaling Collapse',
-                 Xname='X', Yname='Y', normalize = False):
+                 Xname='X', Yname='Y', normalization = None):
         self.Ytheory = Ytheory
         self.parameterNames = parameterNames
         self.parameterNameList = parameterNames.split(",")
@@ -48,8 +48,9 @@ class ScalingTheory:
         self.scalingYTeX = scalingYTeX
         self.title = title
         self.scalingTitle = scalingTitle
-        self.scalingY = scalingY
-        self.normalize = normalize
+        self.normalization = normalization
+        
+        
     def Y(self, X, parameterValues, independentValues):
         """
         Predicts Y as a function of X
@@ -63,9 +64,11 @@ class ScalingTheory:
         exec(self.independentNames + " = independentValues")
         exec(self.Xname + ' = X')
         exec("Y = " + self.Ytheory)
-        if self.normalize:
-            Y = self.Norm(X, Y, parameterValues, independentValues)
+        if self.normalization:
+            fn = getattr(self, self.normalization)
+            Y = fn(X, Y, parameterValues, independentValues)
         return Y
+
     def ScaleX(self, X, parameterValues, independentValues):
         """
         Rescales X according to scaling form
@@ -75,20 +78,21 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        exec(self.Xname + ' = X')
+        exec(self.Xname + " = X")
         exec("XScale = " + self.scalingX)
         return XScale
+
     def ScaleY(self, X, Y, parameterValues, independentValues):
         """
-        Rescales Y according to scaling form
+        Rescales Y according to form
         """
         # Set values of parameters, independent variables, and X vector
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        exec(self.Xname + ' = X')
-        exec(self.Yname + "= Y")
+        exec(self.Xname + " = X")
+        exec(self.Yname + " = Y")
         exec("YScale = " + self.scalingY)
         return YScale
     #
@@ -102,6 +106,7 @@ class ScalingTheory:
         norm += sum(Y[1:-1] * (X[2:]-X[:-2])/2.0)
         norm += Y[-1]*(X[-1]-X[-2])
         return Y/norm
+    
     def NormIntegerSum(self, X, Y, parameterValues, independentValues, \
                 xStart=1., xEnd=1024.):
         """
@@ -110,7 +115,7 @@ class ScalingTheory:
         """
         x = scipy.arange(xStart, xEnd)
         return Y/sum(self.Y(x, parameterValues, independentValues))
-    Norm = NormBasic # Overload if desired
+    
 
 class Data:
     """
@@ -133,6 +138,7 @@ class Data:
         self.fileNames = {}
         self.defaultFractionalError = {}
         self.initialSkip = {}
+        
     def InstallCurve(self, independent, fileName, defaultFractionalError = 0.1,\
                      pointSymbol="o", pointColor="b", \
                      xCol=0, yCol=1, errorCol = 2, initialSkip = 0):
@@ -177,6 +183,7 @@ class Model:
         self.theory = theory
         self.data = data
         self.name = name
+        
     def Residual(self, parameterValues):
         residuals = []
         for independentValues in self.data.experiments:
@@ -188,19 +195,18 @@ class Model:
             # XXX Likely a better way to merge scipy arrays into big one
             residuals = residuals + list((Ytheory-Y)/errorBar)
         return scipy.array(residuals)
+        
     def Cost(self, parameterValues=None):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         residuals = self.Residual(parameterValues)
         return sum(residuals*residuals)
+        
     def PlotFits(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
-        # XXX Having problems with pylab.ioff()
         pylab.ioff()
-        # Bug in pylab:
-        # can't do "legend", "errorbar", and "clf" on the same plot
         pylab.clf()
         if self.data.linlog == 'log':
             minY = 1.e99
@@ -238,6 +244,7 @@ class Model:
         # XXX Turn on if ioff used pylab.ion()
         pylab.ion()
         pylab.show()
+        
     def PlotCollapse(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
         if parameterValues is None:
@@ -256,8 +263,8 @@ class Model:
                 minYscaled = min(minYscaled,min(Yscaled))
         for independentValues in self.data.experiments:
             X = self.data.X[independentValues]
-            Xscaled = self.theory.ScaleX(X, parameterValues, independentValues)
             Y = self.data.Y[independentValues]
+            Xscaled = self.theory.ScaleX(X, parameterValues, independentValues)
             Yscaled = self.theory.ScaleY(X, Y, parameterValues, independentValues)
             pointType = self.data.pointType[independentValues]
             errorBar = self.data.errorBar[independentValues]
@@ -271,11 +278,13 @@ class Model:
             Ytheory = self.theory.Y(X, parameterValues, independentValues)
             YtheoryScaled = self.theory.ScaleY(X, Ytheory, parameterValues, \
                                 independentValues)
+            # Prepare the labels
             lb = self.theory.independentNames + "=" + str(independentValues)
             lb = self.theory.independentNames + "="
             lb += str(independentValues[0])
             for val in independentValues[1:]:
                 lb += "," + str(val)
+            #####################
             if self.data.linlog == 'log':
                 pylab.errorbar(Xscaled,Yscaled, \
                                 yerr=[errorBarDownScaled,errorBarScaled], \
@@ -288,6 +297,7 @@ class Model:
             else:
                  print "Format " + self.data.linlog + \
                         " not supported yet in PlotFits"
+                
         pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
         pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
         pylab.legend(loc=pylabLegendLoc)
@@ -295,12 +305,14 @@ class Model:
         # XXX Turn on if ioff used pylab.ion()
         pylab.ion()
         pylab.show()
+        
     def BestFit(self,initialParameterValues = None):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         out = scipy.optimize.minpack.leastsq(self.Residual, \
                 initialParameterValues, full_output=1) 
         return out[0]
+    
     def PlotBestFit(self, initialParameterValues = None, \
                     figFit = 1, figCollapse=2):
         if initialParameterValues is None:
@@ -333,10 +345,12 @@ class CompositeModel:
             self.parameterNames = ""
             self.initialParameterValues = []
             self.parameterNameList = []
+            
     def __init__(self, name):
         self.Models = {}
         self.theory = self.CompositeTheory()
         self.name = name
+        
     def InstallModel(self,modelName, model):
         self.Models[modelName] = model
         th = self.theory

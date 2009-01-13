@@ -37,7 +37,7 @@ theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 scalingYTeX = scalingYTeX, \
                 title = title, \
                 scalingTitle = scalingTitle, \
-                Xname=Xname, Yname=Yname, normalize = True)
+                Xname=Xname, Yname=Yname, normalization = WS.normalization)
 
 data = SloppyScaling.Data()
 for k in WS.independentValues:
