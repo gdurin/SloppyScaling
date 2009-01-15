@@ -149,7 +149,11 @@ class Data:
         and pointColor from 
             ['b','g','r','c','m','burlywood','chartreuse']
         """
-        independent = tuple(independent)
+        # check if independent is a tuple
+        if not isinstance(independent, tuple):
+            print "Warning: the independent variable is not a tuple"
+            independent = tuple(independent)
+        #
         self.experiments.append(independent)
         self.fileNames[independent] = fileName
         self.initialSkip[independent] = initialSkip
@@ -159,7 +163,7 @@ class Data:
             infile = open(fileName, 'r')
             lines = infile.readlines()
             infile.close()
-            numbers = [line.split() for line in lines]
+            numbers = [line.split() for line in lines[initialSkip:]]
             self.X[independent] = scipy.array( \
                         [float(line[xCol]) for line in numbers])
             self.Y[independent] = scipy.array( \
@@ -202,98 +206,60 @@ class Model:
         residuals = self.Residual(parameterValues)
         return sum(residuals*residuals)
         
-    def PlotFits(self, parameterValues=None, \
-                 fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
-        if parameterValues is None:
-            parameterValues = self.theory.initialParameterValues
-        pylab.ioff()
-        pylab.clf()
-        if self.data.linlog == 'log':
-            minY = 1.e99
-            for independentValues in self.data.experiments:
-                minY = min(minY, min(self.data.Y[independentValues]))
-        for independentValues in self.data.experiments:
-            X = self.data.X[independentValues]
-            Y = self.data.Y[independentValues]
-            pointType = self.data.pointType[independentValues]
-            errorBar = self.data.errorBar[independentValues]
-            # Avoid error bars crossing zero on log-log plots:
-            if self.data.linlog == 'log':
-                errorBarDown = errorBar * (errorBar < Y) \
-                                + (Y-minY) * (errorBar > Y)
-            Ytheory = self.theory.Y(X, parameterValues, independentValues)
-            lb = self.theory.independentNames + "=" + str(independentValues)
-            lb = self.theory.independentNames + "="
-            lb += str(independentValues[0])
-            for val in independentValues[1:]:
-                lb += "," + str(val)
-            if self.data.linlog == 'log':
-                pylab.errorbar(X,Y,fmt=pointType,yerr=[errorBarDown,errorBar],\
-                                label=lb)
-                pylab.loglog(X,Ytheory,pointType[0])
-            elif self.data.linlog == 'lin':
-                pylab.errorbar(X,Y,fmt=pointType, yerr=errorBar,label=lb)
-                pylab.plot(X,Ytheory,pointType[0])
-            else:
-                 print "Format " + self.data.linlog + \
-                        " not supported yet in PlotFits"
-        pylab.xlabel(self.theory.Xname, fontsize = fontSizeLabels)
-        pylab.ylabel(self.theory.Yname, fontsize = fontSizeLabels)
-        pylab.legend(loc=pylabLegendLoc)
-        pylab.title(self.theory.title)
-        # XXX Turn on if ioff used pylab.ion()
-        pylab.ion()
-        pylab.show()
+    def getLabel(self, names, values):
+        lb_name = (names[-1] ==  ',') and names[:-1] or names[-1]
+        lb = lb_name + " = "
+        lb += str(values[0])
+        for val in values[1:]:
+            lb += "," + str(val)
+        return lb
         
-    def PlotCollapse(self, parameterValues=None, \
+    def PlotFunctions(self, parameterValues=None, plotCollapse = False, 
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         # XXX Having problems with pylab.ioff()
         pylab.ioff()
-        # Bug in pylab:
-        # can't do "legend", "errorbar", and "clf" on the same plot
         pylab.clf()
         if self.data.linlog == 'log':
-            minYscaled = 1.e99
+            minY = 1.e99
             for independentValues in self.data.experiments:
-                X = self.data.X[independentValues]
                 Y = self.data.Y[independentValues]
-                Yscaled = self.theory.ScaleY(X,Y,parameterValues,independentValues)
-                minYscaled = min(minYscaled,min(Yscaled))
+                if plotCollapse:
+                    X = self.data.X[independentValues]
+                    Y = self.theory.ScaleY(X,Y,parameterValues,independentValues)
+                minY = min(minY,min(Y))
+                
         for independentValues in self.data.experiments:
             X = self.data.X[independentValues]
             Y = self.data.Y[independentValues]
-            Xscaled = self.theory.ScaleX(X, parameterValues, independentValues)
-            Yscaled = self.theory.ScaleY(X, Y, parameterValues, independentValues)
+            Ytheory = self.theory.Y(X, parameterValues, independentValues)
             pointType = self.data.pointType[independentValues]
             errorBar = self.data.errorBar[independentValues]
-            errorBarScaled = self.theory.ScaleY(X, errorBar, \
-                                parameterValues, independentValues)
+            if plotCollapse:
+                # Scaled error bars and Y need not-rescaled X
+                errorBar = self.theory.ScaleY(X, errorBar, parameterValues, independentValues)
+                Y = self.theory.ScaleY(X, Y, parameterValues, independentValues)
+                Ytheory = self.theory.ScaleY(X, Ytheory, parameterValues, independentValues)
+                # Then rescale X too
+                X = self.theory.ScaleX(X, parameterValues, independentValues)
+                
             # Avoid error bars crossing zero on log-log plots
             if self.data.linlog == 'log':
-                errorBarDownScaled = \
-                        errorBarScaled * (errorBarScaled < Yscaled) \
-                     + (Yscaled-minYscaled) * (errorBarScaled > Yscaled)
-            Ytheory = self.theory.Y(X, parameterValues, independentValues)
-            YtheoryScaled = self.theory.ScaleY(X, Ytheory, parameterValues, \
-                                independentValues)
+                errorBarDown = errorBar * (errorBar < Y) + (Y -minY) * (errorBar > Y)                
+                
             # Prepare the labels
-            lb = self.theory.independentNames + "=" + str(independentValues)
-            lb = self.theory.independentNames + "="
-            lb += str(independentValues[0])
-            for val in independentValues[1:]:
-                lb += "," + str(val)
+            lb = self.getLabel(self.theory.independentNames, independentValues)
             #####################
-            if self.data.linlog == 'log':
-                pylab.errorbar(Xscaled,Yscaled, \
-                                yerr=[errorBarDownScaled,errorBarScaled], \
-                                fmt=pointType,label=lb)
-                pylab.loglog(Xscaled,YtheoryScaled,pointType[0])
-            elif self.data.linlog == 'lin':
-                pylab.errorbar(Xscaled,Yscaled,yerr=errorBarScaled, \
-                                fmt=pointType,label=lb)
-                pylab.plot(X,Ytheory,pointType[0])
+            if self.data.linlog == 'log' or self.data.linlog == 'lin':
+                if self.data.linlog == 'log':
+                    y_error=[errorBarDown,errorBar]
+                    plot_fn = getattr(pylab,'loglog')
+                elif self.data.linlog == 'lin':
+                    y_error=errorBar
+                    plot_fn = getattr(pylab,'plot')
+                pylab.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
+                plot_fn(X,Ytheory,pointType[0])
             else:
                  print "Format " + self.data.linlog + \
                         " not supported yet in PlotFits"
@@ -324,9 +290,9 @@ class Model:
                 zip(self.theory.parameterNameList,optimizedParameterValues):
             print name + " = ", val
         pylab.figure(figFit)
-        self.PlotFits(optimizedParameterValues)
+        self.PlotFunctions(optimizedParameterValues)
         pylab.figure(figCollapse)
-        self.PlotCollapse(optimizedParameterValues)
+        self.PlotFunctions(optimizedParameterValues, plotCollapse = True)
         # XXX JPS: Why do I need to do this to raise figures?
         pylab.figure(figFit)
         pylab.figure(figCollapse)
@@ -404,6 +370,7 @@ class CompositeModel:
             model.PlotFits(parameterValues, fontSizeLabels, pylabLegendLoc)
             # Weird bug: repeating figure needed to get to show
             pylab.figure(figNum)
+            
     def PlotCollapse(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.), figNumStart=1):
         if parameterValues is None:
@@ -412,14 +379,16 @@ class CompositeModel:
         for model in self.Models.values():
             figNum+=1
             pylab.figure(figNum)
-            model.PlotCollapse(parameterValues, fontSizeLabels, pylabLegendLoc)
+            model.PlotFunctions(parameterValues, fontSizeLabels, pylabLegendLoc, plotCollapse = True)
             pylab.figure(figNum)
+            
     def BestFit(self,initialParameterValues = None):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         out = scipy.optimize.minpack.leastsq(self.Residual, \
                 initialParameterValues, full_output=1) 
         return out[0]
+        
     def PlotBestFit(self, initialParameterValues = None, \
                     figNumStart = 1):
         if initialParameterValues is None:
@@ -435,11 +404,11 @@ class CompositeModel:
         for model in self.Models.values():
             figNum+=1
             pylab.figure(figNum)
-            model.PlotFits(optimizedParameterValues)
+            model.PlotFunctions(optimizedParameterValues, plotCollapse = False)
             # Weird bug: repeating figure needed to get to show
             pylab.figure(figNum)
             figNum+=1
             pylab.figure(figNum)
-            model.PlotCollapse(optimizedParameterValues)
+            model.PlotFunctions(optimizedParameterValues, plotCollapse = True)
             pylab.figure(figNum)
         return optimizedParameterValues

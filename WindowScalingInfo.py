@@ -11,10 +11,18 @@ dataDirectory = GianfrancoDataDirectory
 # Independent variables describing data.
 independentNames = "k"
 # Values for independent variables. (List of tuples if more than one.)
-independentValues = [0.001,0.005,0.01,0.05,0.1,1,10]
+#independentValues = [0.001,0.005,0.01,0.05,0.1,1,10]
+independentValues = [0.005,0.01,0.05,0.1,1,10]
 # Type of normalization for the function (None, NormBasic, NormIntegerSum)
 normalization = "NormBasic"
-
+# Decide to add corrections to scaling in the function module (True/False)
+corrections_to_scaling = False
+# Rows to skip in the dataFiles
+rows_to_skip = 2
+# System Size (used to get the fileNames)
+systemSize = "System_Size=2048x1024"
+# Type of simulation: Linear, NonLinear etc
+simulType = "NonLinear"
 #
 # DO NOT CHANGE ANYTHING BELOW
 #
@@ -30,7 +38,7 @@ def MakeSymbolsAndColors(independentValues):
     # 9 symbols, 5 colors: numbers should be relatively prime
     # 45 maximum different
     pointSymbolTypes = ['o','^','v','<','>','s','p','+','x']
-    pointColorTypes = ['b','g','r','c','m']
+    pointColorTypes = ['b','g','r','c','m','k','y']
     # Replicate to make enough symbols for different data types
     SymbolList = len(pointColorTypes) * pointSymbolTypes
     ColorList = len(pointSymbolTypes) * pointColorTypes
