@@ -14,7 +14,7 @@ Ytheory_corrections = "exp(Aw1/w+Aw2/w**2) * exp(Uw1*(w*k**sigma_k)+Uw2/(w*k**si
                  
 Xname = 'w'
 # XXX Might want a YTeX name too?
-Yname = 'Awk'
+Yname = 'Awk' # This must be the name of the module !!!!!!!!!
 scalingX = "w*k**(sigma_k)"
 scalingXTeX = "$w k^{\sigma_k}$"
 scalingY = \
@@ -48,10 +48,14 @@ theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
 data = SloppyScaling.Data()
 for k in WS.independentValues:
     fileName = WS.dataDirectory + name + str(k) \
-        + "_" + WS.systemSize + "_"+ WS.simulType + ".bin"
+        + "_" + WS.systemSize + "_"+ WS.simulType + ".bnd"
     independent = (k,) # Must be a tuple
     data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[k], \
         pointColor=WS.Color[k], \
         initialSkip = WS.rows_to_skip)
-Awk = SloppyScaling.Model(theory, data, name)
+    
+f = __file__
+f = f.split("/")[-1]
+thisModule = f.split('Module.py')[0]
+exec(thisModule + "= SloppyScaling.Model(theory, data, name)")

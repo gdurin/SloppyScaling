@@ -221,6 +221,7 @@ class Model:
         # XXX Having problems with pylab.ioff()
         pylab.ioff()
         pylab.clf()
+        ax0 = [1.e99,0,1.e99,0]
         if self.data.linlog == 'log':
             minY = 1.e99
             for independentValues in self.data.experiments:
@@ -247,23 +248,30 @@ class Model:
             # Avoid error bars crossing zero on log-log plots
             if self.data.linlog == 'log':
                 errorBarDown = errorBar * (errorBar < Y) + (Y -minY) * (errorBar > Y)                
+                y_error=[errorBarDown,errorBar]
+            else:
+                y_error=errorBar
                 
             # Prepare the labels
             lb = self.getLabel(self.theory.independentNames, independentValues)
             #####################
             if self.data.linlog == 'log' or self.data.linlog == 'lin':
                 if self.data.linlog == 'log':
-                    y_error=[errorBarDown,errorBar]
                     plot_fn = getattr(pylab,'loglog')
                 elif self.data.linlog == 'lin':
-                    y_error=errorBar
                     plot_fn = getattr(pylab,'plot')
+                # Plot first data with their error
                 pylab.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
+                # Get the current values of the axes
+                ax = pylab.axis()
+                ax0 = [min(ax0[0],ax[0]), max(ax0[1],ax[1]),min(ax0[2],ax[2]),max(ax0[3],ax[3])]
+                # Plot the theory function
                 plot_fn(X,Ytheory,pointType[0])
             else:
                  print "Format " + self.data.linlog + \
                         " not supported yet in PlotFits"
                 
+        pylab.axis(tuple(ax))
         pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
         pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
         pylab.legend(loc=pylabLegendLoc)
@@ -348,17 +356,20 @@ class CompositeModel:
             currentModel.theory.parameterNames=th.parameterNames
             currentModel.theory.parameterNameList=th.parameterNameList
             currentModel.theory.initialParameterValues=th.initialParameterValues
+            
     def Residual(self, parameterValues):
         residuals = []
         for model in self.Models.values():
             modelResidual = model.Residual(parameterValues)
             residuals = residuals + list(modelResidual)
         return scipy.array(residuals)
+        
     def Cost(self, parameterValues=None):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         residuals = self.Residual(parameterValues)
         return sum(residuals*residuals)
+        
     def PlotFits(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.), figNumStart=1):
         if parameterValues is None:

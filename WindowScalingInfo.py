@@ -3,10 +3,22 @@
 Useful information about the WindowScaling data sets
 """
 
+# System Size (used to get the fileNames)
+systemSize = "2048x1024"
+#systemSize = "4096x2048"
+#systemSize = "8192x4096"
+
+# Type of simulation: Linear, NonLinear etc
+simulType = "NonLinear"
+
 # Directory where data to be fit is stored
 IthacaDataDirectory = "data/"
-GianfrancoDataDirectory = "/home/meas/WinSim/NonLinear/L1024x2048/data/"
+GianfrancoDataDirectory = "/home/meas/WinSim/NonLinear/L"+ systemSize + "/data/"
 dataDirectory = GianfrancoDataDirectory
+
+# Data to fit and models
+#moduleNames = ['Ahk','Awk']
+moduleNames = ['Ahk']
 
 # Independent variables describing data.
 independentNames = "k"
@@ -19,15 +31,13 @@ normalization = "NormBasic"
 corrections_to_scaling = False
 # Rows to skip in the dataFiles
 rows_to_skip = 2
-# System Size (used to get the fileNames)
-systemSize = "System_Size=2048x1024"
-# Type of simulation: Linear, NonLinear etc
-simulType = "NonLinear"
 #
 # DO NOT CHANGE ANYTHING BELOW
 #
-# Check if independentNames has a ',' at the end, and add it if needed
+# Check if independentNames and moduleNames has a ',' at the end, and add it if needed
 independentNames += (independentNames[-1]!=',') * ","
+systemSize = "System_Size=" + systemSize
+
 
 # Colors and shapes for data points for plots
 # (shared between different data types)

@@ -13,7 +13,7 @@ Ytheory = "(h*k**(zeta*sigma_k))**((2.-tau)*(1.+zeta)/zeta) \
 Ytheory_corrections = "exp(Ah1/h+Ah2/h**2) \
                  *exp(Uh1*(h*k**(zeta*sigma_k)) + Uh2/(h*k**(zeta*sigma_k)))"
 Xname = 'h'
-Yname = 'Ahk'
+Yname = 'Ahk' # This must be the name of the module !!!!!!!!!
 # XXX Might want a YTeX name too?
 scalingX = "h*k**(zeta*sigma_k)"
 scalingXTeX = r'$h k^{\zeta \sigma_k}$'
@@ -48,11 +48,14 @@ theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
 data = SloppyScaling.Data()
 for k in WS.independentValues:
     fileName = WS.dataDirectory + name + str(k) \
-        + "_" + WS.systemSize + "_"+ WS.simulType + ".bin"
+        + "_" + WS.systemSize + "_"+ WS.simulType + ".bnd"
     independent = (k,) # Must be a tuple
     data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[k], \
         pointColor=WS.Color[k], \
         initialSkip = WS.rows_to_skip)
-    
-Ahk = SloppyScaling.Model(theory, data, name)
+
+f = __file__
+f = f.split("/")[-1]
+thisModule = f.split('Module.py')[0]
+exec(thisModule + "= SloppyScaling.Model(theory, data, name)")

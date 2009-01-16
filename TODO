@@ -1,0 +1,7 @@
+TODO list
+
+* Change .bin to .bnd as a file extention (Done)
+* Axes scale control for point, not for lines (Done)
+* Create JoinModule.py to replace AwkAhkModule and set variables to load the propert modules
+
+
