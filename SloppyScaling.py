@@ -261,17 +261,18 @@ class Model:
                 elif self.data.linlog == 'lin':
                     plot_fn = getattr(pylab,'plot')
                 # Plot first data with their error
+                plot_fn(X,Y,pointType[1]) # This is needed to get the correct axis
                 pylab.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
-                # Get the current values of the axes
-                ax = pylab.axis()
-                ax0 = [min(ax0[0],ax[0]), max(ax0[1],ax[1]),min(ax0[2],ax[2]),max(ax0[3],ax[3])]
+                # Get the current values of the axis
+                for i, Ax in enumerate(pylab.axis()):
+                    ax0[i] = i%2 and max(ax0[i],Ax) or min(ax0[i],Ax)
                 # Plot the theory function
                 plot_fn(X,Ytheory,pointType[0])
             else:
                  print "Format " + self.data.linlog + \
                         " not supported yet in PlotFits"
                 
-        pylab.axis(tuple(ax))
+        pylab.axis(tuple(ax0))
         pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
         pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
         pylab.legend(loc=pylabLegendLoc)
