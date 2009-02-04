@@ -149,6 +149,8 @@ class Data:
         and pointColor from 
             ['b','g','r','c','m','burlywood','chartreuse']
         """
+        factor = 10.0 
+        # factor is to artificially increase error bars for better fits
         # check if independent is a tuple
         if not isinstance(independent, tuple):
             print "Warning: the independent variable is not a tuple"
@@ -170,7 +172,7 @@ class Data:
                         [float(line[yCol]) for line in numbers])
             if errorCol is not None:
                 self.errorBar[independent] =  \
-                        scipy.array([float(line[errorCol]) for line in numbers])
+                        scipy.array([float(line[errorCol])*factor for line in numbers])
             else:
                 self.errorBar[independent] = \
                     self.Y[independent] * defaultFractionalError
@@ -273,10 +275,10 @@ class Model:
                         " not supported yet in PlotFits"
                 
         pylab.axis(tuple(ax0))
-        pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
-        pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
+        #pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
+        #pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
         pylab.legend(loc=pylabLegendLoc)
-        pylab.title(self.theory.scalingTitle)
+        #pylab.title(self.theory.scalingTitle)
         # XXX Turn on if ioff used pylab.ion()
         pylab.ion()
         pylab.show()
@@ -289,7 +291,7 @@ class Model:
         return out[0]
     
     def PlotBestFit(self, initialParameterValues = None, \
-                    figFit = 1, figCollapse=2):
+                    figFit = 1, figCollapse=2, fontSizeLabels=18):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         print 'initial cost = ', self.Cost(initialParameterValues)
@@ -304,7 +306,13 @@ class Model:
         self.PlotFunctions(optimizedParameterValues, plotCollapse = True)
         # XXX JPS: Why do I need to do this to raise figures?
         pylab.figure(figFit)
+        pylab.xlabel(self.theory.Xname, fontsize=fontSizeLabels)
+        pylab.ylabel(self.theory.Yname, fontsize=fontSizeLabels)
+        pylab.title(self.theory.title, fontsize=fontSizeLabels)
         pylab.figure(figCollapse)
+        pylab.xlabel(self.theory.scalingXTeX, fontsize=fontSizeLabels)
+        pylab.ylabel(self.theory.scalingYTeX, fontsize=fontSizeLabels)
+        pylab.title(self.theory.scalingTitle, fontsize=fontSizeLabels)        
         return optimizedParameterValues
 
 class CompositeModel:
