@@ -1,5 +1,6 @@
 import scipy
 import pylab
+import copy
 from scipy import exp
 import scipy.optimize
 
@@ -26,7 +27,7 @@ class ScalingTheory:
                 scalingYTeX = r'$D S^\tau$',
                 title= 'Avalanche histo$'
                 scalingTitle= 'Avalanche histo scaling plot'
-                Xname = 'S', Yname = 'D', normalization = True)
+                Xname = 'S', Xsname='Ss', Yname = 'D', normalization = True)
     """
     def __init__(self, Ytheory, parameterNames, initialParameterValues, \
                  independentNames, \
@@ -34,13 +35,14 @@ class ScalingTheory:
                  scalingXTeX = r'${\cal{X}}$', \
                  scalingYTeX = r'${\cal{Y}}$', \
                  title = 'Fit', scalingTitle = 'Scaling Collapse',
-                 Xname='X', Yname='Y', normalization = None):
+                 Xname='X', Xsname = 'Ss', Yname='Y', normalization = None):
         self.Ytheory = Ytheory
         self.parameterNames = parameterNames
         self.parameterNameList = parameterNames.split(",")
         self.initialParameterValues = initialParameterValues
         self.independentNames = independentNames
         self.Xname = Xname
+        self.Xsname = Xsname
         self.Yname = Yname
         self.scalingX = scalingX
         self.scalingY = scalingY
@@ -49,8 +51,11 @@ class ScalingTheory:
         self.title = title
         self.scalingTitle = scalingTitle
         self.normalization = normalization
-        
-        
+        #set fixed parameters after assembling model or composite model
+        self.fixedParamNamesList = []
+        self.fixedParamNames = ""
+        self.fixedParamValues = []
+                
     def Y(self, X, parameterValues, independentValues):
         """
         Predicts Y as a function of X
@@ -62,7 +67,10 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
+        if len(self.fixedParamNamesList) > 0:
+            exec(self.fixedParamNames + "= self.fixedParamValues")
         exec(self.Xname + ' = X')
+        exec(self.Xsname +'='+ self.scalingX) 
         exec("Y = " + self.Ytheory)
         if self.normalization:
             fn = getattr(self, self.normalization)
@@ -78,7 +86,10 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
+        if len(self.fixedParamNamesList) > 0:
+            exec(self.fixedParamNames + "= self.fixedParamValues")
         exec(self.Xname + " = X")
+        exec(self.Xsname + '=' +self.scalingX)
         exec("XScale = " + self.scalingX)
         return XScale
 
@@ -91,10 +102,37 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
+        if len(self.fixedParamNamesList) > 0:
+            exec(self.fixedParamNames + "= self.fixedParamValues")
         exec(self.Xname + " = X")
+        exec(self.Xsname + "="+self.scalingX)
         exec(self.Yname + " = Y")
         exec("YScale = " + self.scalingY)
         return YScale
+
+    def SetFixedParams(self, fixedParamNames):
+        """
+        sets parameters named in fixed to be fixed to their initial values or values specified in fixedVals
+        """
+        tempNameList = copy.copy(self.parameterNameList)
+        for name in fixedParamNames:
+            if name in tempNameList:
+               #index = self.parameterNameList.index(name)
+               #self.parameterNameList.pop(index)
+               index = tempNameList.index(name)
+               otherindex = fixedParamNames.index(name)
+               tempNameList.pop(index)
+               #self.parameterNames = ",".join(self.parameterNameList)
+               ParamValslist = list(self.initialParameterValues)
+               value = ParamValslist.pop(index)
+               self.initialParameterValues = tuple(ParamValslist)
+               #we have to change tuple -> list so we can use pop
+               self.fixedParamNamesList.append(name)
+               self.fixedParamValues.append(value)
+        self.parameterNames = ",".join(tempNameList)
+        self.parameterNameList = tempNameList
+        self.fixedParamNames = ",".join(self.fixedParamNamesList)
+        self.fixedParamValues = tuple(self.fixedParamValues)
     #
     # Various options for normalization
     #
@@ -165,7 +203,7 @@ class Data:
             infile = open(fileName, 'r')
             lines = infile.readlines()
             infile.close()
-            numbers = [line.split() for line in lines[initialSkip:]]
+            numbers = [line.split() for line in lines]
             self.X[independent] = scipy.array( \
                         [float(line[xCol]) for line in numbers])
             self.Y[independent] = scipy.array( \
@@ -217,7 +255,7 @@ class Model:
         return lb
         
     def PlotFunctions(self, parameterValues=None, plotCollapse = False, 
-                 fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
+                 fontSizeLabels = 18, pylabLegendLoc=(0.,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         # XXX Having problems with pylab.ioff()
@@ -232,7 +270,9 @@ class Model:
                     X = self.data.X[independentValues]
                     Y = self.theory.ScaleY(X,Y,parameterValues,independentValues)
                 minY = min(minY,min(Y))
-                
+        
+        #pylab.plot([],label=r'$win (k/L)^{\sigma_k \zeta}$')
+        
         for independentValues in self.data.experiments:
             X = self.data.X[independentValues]
             Y = self.data.Y[independentValues]
@@ -255,7 +295,11 @@ class Model:
                 y_error=errorBar
                 
             # Prepare the labels
-            lb = self.getLabel(self.theory.independentNames, independentValues)
+            #lb = self.getLabel(self.theory.independentNames, independentValues)
+            k, L, win = independentValues
+            lb = str(k)+','+str(L)+','+str(win)+','+str((1.0*k/L)**(0.387)*win)[0:5]
+            #lb = str((1.0*k/L)**(0.387)*win)[0:5]
+            pylab.rcParams.update({'legend.fontsize':12})
             #####################
             if self.data.linlog == 'log' or self.data.linlog == 'lin':
                 if self.data.linlog == 'log':
@@ -275,10 +319,16 @@ class Model:
                         " not supported yet in PlotFits"
                 
         pylab.axis(tuple(ax0))
-        #pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
-        #pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
-        pylab.legend(loc=pylabLegendLoc)
-        #pylab.title(self.theory.scalingTitle)
+        pylab.legend(loc=pylabLegendLoc, ncol=2)
+        #pylab.legend(loc=pylabLegendLoc)
+        if plotCollapse:
+            pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
+            pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
+            pylab.title(self.theory.scalingTitle)
+        else:
+            pylab.xlabel(self.theory.Xname, fontsize = fontSizeLabels)
+            pylab.ylabel(self.theory.Yname, fontsize = fontSizeLabels)
+            pylab.title(self.theory.title, fontsize = fontSizeLabels)
         # XXX Turn on if ioff used pylab.ion()
         pylab.ion()
         pylab.show()
@@ -306,13 +356,13 @@ class Model:
         self.PlotFunctions(optimizedParameterValues, plotCollapse = True)
         # XXX JPS: Why do I need to do this to raise figures?
         pylab.figure(figFit)
-        pylab.xlabel(self.theory.Xname, fontsize=fontSizeLabels)
-        pylab.ylabel(self.theory.Yname, fontsize=fontSizeLabels)
-        pylab.title(self.theory.title, fontsize=fontSizeLabels)
+        #pylab.xlabel(self.theory.Xname, fontsize=fontSizeLabels)
+        #pylab.ylabel(self.theory.Yname, fontsize=fontSizeLabels)
+        #pylab.title(self.theory.title, fontsize=fontSizeLabels)
         pylab.figure(figCollapse)
-        pylab.xlabel(self.theory.scalingXTeX, fontsize=fontSizeLabels)
-        pylab.ylabel(self.theory.scalingYTeX, fontsize=fontSizeLabels)
-        pylab.title(self.theory.scalingTitle, fontsize=fontSizeLabels)        
+        #pylab.xlabel(self.theory.scalingXTeX, fontsize=fontSizeLabels)
+        #pylab.ylabel(self.theory.scalingYTeX, fontsize=fontSizeLabels)
+        #pylab.title(self.theory.scalingTitle, fontsize=fontSizeLabels)        
         return optimizedParameterValues
 
 class CompositeModel:
@@ -365,7 +415,17 @@ class CompositeModel:
             currentModel.theory.parameterNames=th.parameterNames
             currentModel.theory.parameterNameList=th.parameterNameList
             currentModel.theory.initialParameterValues=th.initialParameterValues
-            
+
+    def SetFixedParams(self, fixedParamNames):
+        """
+        Sets parameters in fixedParamNames to their initial values, and updates the parameter values, names of the composite model
+        """
+        for model in self.Models.values():
+            model.theory.SetFixedParams(fixedParamNames)
+            self.theory.parameterNames = model.theory.parameterNames
+            self.theory.parameterNameList = model.theory.parameterNameList
+            self.theory.initialParameterValues = model.theory.initialParameterValues
+
     def Residual(self, parameterValues):
         residuals = []
         for model in self.Models.values():
@@ -405,8 +465,7 @@ class CompositeModel:
     def BestFit(self,initialParameterValues = None):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
-        out = scipy.optimize.minpack.leastsq(self.Residual, \
-                initialParameterValues, full_output=1) 
+        out = scipy.optimize.minpack.leastsq(self.Residual, initialParameterValues, full_output=1) 
         return out[0]
         
     def PlotBestFit(self, initialParameterValues = None, \
