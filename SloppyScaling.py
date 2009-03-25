@@ -3,6 +3,12 @@ import pylab
 import copy
 from scipy import exp
 import scipy.optimize
+import scipy.special
+import WindowScalingInfo as WS
+reload(WS)
+import Utils
+reload(Utils)
+
 
 class ScalingTheory:
     """
@@ -19,7 +25,7 @@ class ScalingTheory:
     appropriately.
     #
     Example of implementation:
-    sizeHisto = ScalingTheory('S**(-tau) * exp((-(S*(R-Rc)**sigma)/XS)**nS)',
+    sizeHisto = ScalingTheory('S**(-tau)*scipy.exp((-(S*(R-Rc)**sigma)/XS)**nS)',
                 'tau, sigma, XS, nS, Rc', (1.5,0.5,1.0,1.0,2.0),
                 independentNames = 'R',
                 scalingX = 'S*r**sigma', scalingY = 'D*S**tau',
@@ -35,14 +41,18 @@ class ScalingTheory:
                  scalingXTeX = r'${\cal{X}}$', \
                  scalingYTeX = r'${\cal{Y}}$', \
                  title = 'Fit', scalingTitle = 'Scaling Collapse',
-                 Xname='X', Xsname = 'Ss', Yname='Y', normalization = None):
+                 Xname='X', XscaledName = None, Yname='Y', \
+                 fixParameter = False, fixedParameters = "", \
+                 normalization = None):
         self.Ytheory = Ytheory
         self.parameterNames = parameterNames
         self.parameterNameList = parameterNames.split(",")
         self.initialParameterValues = initialParameterValues
+        self.parameterNames0 = parameterNames
+        self.initialParameterValues0 = initialParameterValues
         self.independentNames = independentNames
         self.Xname = Xname
-        self.Xsname = Xsname
+        self.XscaledName = XscaledName
         self.Yname = Yname
         self.scalingX = scalingX
         self.scalingY = scalingY
@@ -51,11 +61,8 @@ class ScalingTheory:
         self.title = title
         self.scalingTitle = scalingTitle
         self.normalization = normalization
-        #set fixed parameters after assembling model or composite model
-        self.fixedParamNamesList = []
-        self.fixedParamNames = ""
-        self.fixedParamValues = []
-                
+        self.fixParameter = False
+
     def Y(self, X, parameterValues, independentValues):
         """
         Predicts Y as a function of X
@@ -67,10 +74,14 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        if len(self.fixedParamNamesList) > 0:
-            exec(self.fixedParamNames + "= self.fixedParamValues")
+        #if len(self.fixedParamNamesList) > 0:
+        #    exec(self.fixedParamNames + "= self.fixedParamValues")
+        if self.fixParameter:
+            for par, val in self.fixedParameters:
+                exec(par + " = " + str(val))
         exec(self.Xname + ' = X')
-        exec(self.Xsname +'='+ self.scalingX) 
+        if self.XscaledName:
+            exec(self.XscaledName +'='+ self.scalingX) 
         exec("Y = " + self.Ytheory)
         if self.normalization:
             fn = getattr(self, self.normalization)
@@ -86,10 +97,12 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        if len(self.fixedParamNamesList) > 0:
-            exec(self.fixedParamNames + "= self.fixedParamValues")
+        #if len(self.fixedParamNamesList) > 0:
+        #    exec(self.fixedParamNames + "= self.fixedParamValues")
+        if self.fixParameter:
+            for par, val in self.fixedParameters:
+                exec(par + " = " + str(val))
         exec(self.Xname + " = X")
-        exec(self.Xsname + '=' +self.scalingX)
         exec("XScale = " + self.scalingX)
         return XScale
 
@@ -102,37 +115,39 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        if len(self.fixedParamNamesList) > 0:
-            exec(self.fixedParamNames + "= self.fixedParamValues")
+        #if len(self.fixedParamNamesList) > 0:
+        #    exec(self.fixedParamNames + "= self.fixedParamValues")
+        if self.fixParameter:
+            for par, val in self.fixedParameters:
+                exec(par + " = " + str(val))
         exec(self.Xname + " = X")
-        exec(self.Xsname + "="+self.scalingX)
+        if self.XscaledName:
+            exec(self.XscaledName + "="+self.scalingX)
         exec(self.Yname + " = Y")
         exec("YScale = " + self.scalingY)
         return YScale
 
-    def SetFixedParams(self, fixedParamNames):
+    def SetFixedParams(self, fixedParameters):
         """
-        sets parameters named in fixed to be fixed to their initial values or values specified in fixedVals
+        Sets parameters to a fixed values.
+        fixedParameters is a list of tuple(s) of the type:
+        [('param1', val1), ('param2', val2)]
         """
-        tempNameList = copy.copy(self.parameterNameList)
-        for name in fixedParamNames:
-            if name in tempNameList:
-               #index = self.parameterNameList.index(name)
-               #self.parameterNameList.pop(index)
-               index = tempNameList.index(name)
-               otherindex = fixedParamNames.index(name)
-               tempNameList.pop(index)
-               #self.parameterNames = ",".join(self.parameterNameList)
-               ParamValslist = list(self.initialParameterValues)
-               value = ParamValslist.pop(index)
-               self.initialParameterValues = tuple(ParamValslist)
-               #we have to change tuple -> list so we can use pop
-               self.fixedParamNamesList.append(name)
-               self.fixedParamValues.append(value)
-        self.parameterNames = ",".join(tempNameList)
-        self.parameterNameList = tempNameList
-        self.fixedParamNames = ",".join(self.fixedParamNamesList)
-        self.fixedParamValues = tuple(self.fixedParamValues)
+        if not isinstance(fixedParameters,list):
+            fixedParameters = [fixedParameters]
+        # Set first the fixParameter to true and
+        # pass the parameters to fix
+        if not self.fixParameter:
+            self.fixParameter = True
+        
+        # Then adjust the Names and the Values
+        self.parameterNames, self.initialParameterValues = \
+                    Utils.reduceParameters(self.parameterNames0, \
+                                           self.initialParameterValues0, \
+                                           fixedParameters)
+        self.parameterNamesList = ",".join(self.parameterNames)
+        self.fixedParameters = fixedParameters
+        print self.fixedParameters
     #
     # Various options for normalization
     #
@@ -142,6 +157,8 @@ class ScalingTheory:
         """
         norm = Y[0]*(X[1]-X[0])
         norm += sum(Y[1:-1] * (X[2:]-X[:-2])/2.0)
+        # GF: Why not this below?
+        #norm += sum(Y[1:-2] * (X[2:-1]-X[:-3])/2.0)
         norm += Y[-1]*(X[-1]-X[-2])
         return Y/norm
     
@@ -153,7 +170,17 @@ class ScalingTheory:
         """
         x = scipy.arange(xStart, xEnd)
         return Y/sum(self.Y(x, parameterValues, independentValues))
-    
+        
+    def NormLog(self,X,Y,parameterValues, independentValues):
+        """
+        This kind of normalization is correct
+        if the data are uniform in log scale,
+        as prepared by our code toBinDistributions.py
+        """
+        lgX = scipy.log10(X)
+        D = scipy.around(lgX[1] - lgX[0],2)
+        bins = 10**(lgX+D/2.) - 10**(lgX-D/2.)
+        return Y/sum(Y*bins)
 
 class Data:
     """
@@ -179,16 +206,17 @@ class Data:
         
     def InstallCurve(self, independent, fileName, defaultFractionalError = 0.1,\
                      pointSymbol="o", pointColor="b", \
-                     xCol=0, yCol=1, errorCol = 2, initialSkip = 0):
+                     xCol=0, yCol=1, errorCol = 2, initialSkip = 0, factorError = 10.0):
         """
         Curves for independent control parameters given by "independent"
         loaded from "fileName". Plots use, for example, pointSymbol from 
             ['o','^','v','<','>','s', 'p', 'h','+','x']
         and pointColor from 
             ['b','g','r','c','m','burlywood','chartreuse']
+        
+        factorError is to artificially increase error bars for better fits
         """
-        factor = 10.0 
-        # factor is to artificially increase error bars for better fits
+        
         # check if independent is a tuple
         if not isinstance(independent, tuple):
             print "Warning: the independent variable is not a tuple"
@@ -208,9 +236,9 @@ class Data:
                         [float(line[xCol]) for line in numbers])
             self.Y[independent] = scipy.array( \
                         [float(line[yCol]) for line in numbers])
-            if errorCol is not None:
+            if not errorCol:
                 self.errorBar[independent] =  \
-                        scipy.array([float(line[errorCol])*factor for line in numbers])
+                        scipy.array([float(line[errorCol])*factorError for line in numbers])
             else:
                 self.errorBar[independent] = \
                     self.Y[independent] * defaultFractionalError
@@ -223,13 +251,22 @@ class Model:
     calculate the residuals (the difference between theory and data)
     and the cost.
     """
-    def __init__(self, theory, data, name):
+    def __init__(self, theory, data, name, sorting):
         self.theory = theory
         self.data = data
         self.name = name
+        self.sorting = sorting
         
-    def Residual(self, parameterValues):
-        residuals = []
+    def Residual(self, parameterValues, dictResidual=False):
+        """
+        Calculate the weighted residuals,
+        with the weights = 1 / errorbar
+        """
+        if dictResidual:
+            residuals = {}
+        else:
+            residuals = scipy.array([])
+            
         for independentValues in self.data.experiments:
             initialSkip = self.data.initialSkip[independentValues]
             X = self.data.X[independentValues][initialSkip:]
@@ -237,25 +274,91 @@ class Model:
             errorBar = self.data.errorBar[independentValues][initialSkip:]
             Ytheory = self.theory.Y(X, parameterValues, independentValues)
             # XXX Likely a better way to merge scipy arrays into big one
-            residuals = residuals + list((Ytheory-Y)/errorBar)
-        return scipy.array(residuals)
+            # Yes: there is
+            res = (Ytheory-Y)/errorBar
+            if dictResidual:
+                residuals[independentValues] = res
+            else:
+                residuals = scipy.concatenate((residuals,res))
+        return residuals
         
     def Cost(self, parameterValues=None):
+        """
+        Sum of the squares of the residuals
+        """
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         residuals = self.Residual(parameterValues)
         return sum(residuals*residuals)
+    
+    def SST(self, parameterValues=None):
+        """
+        SST is the sum of the squares about the mean
+        """
+        sst = 0.
+        if parameterValues is None:
+            parameterValues = self.theory.initialParameterValues
+        for independentValues in self.data.experiments:
+            initialSkip = self.data.initialSkip[independentValues]
+            Y = self.data.Y[independentValues][initialSkip:]
+            errorBar = self.data.errorBar[independentValues][initialSkip:]
+            sst_partial = (Y-scipy.mean(Y))/errorBar
+            sst += sum(sst_partial*sst_partial)
+        return sst
+    
+    def R_square(self,parameterValues=None):
+        """
+        Calculates the R-square = 1 - cost / SST
+        where SST is the sum of the squares about the mean
+        """
+        sst = self.SST(parameterValues)
+        cost = self.Cost(parameterValues)
+        return 1.- cost/sst
         
-    def getLabel(self, names, values):
-        lb_name = (names[-1] ==  ',') and names[:-1] or names[-1]
-        lb = lb_name + " = "
-        lb += str(values[0])
-        for val in values[1:]:
-            lb += "," + str(val)
+    def getLabel(self, names, values, withRescale = False, sigma = 0.387):
+        """
+        Get the Labels to be plotted. 
+        """
+        #lb_name = (names[-1] ==  ',') and names[:-1] or names[-1]
+        lb = names + " = "
+        lb += ",".join([str(i) for i in values])
+        
+        if withRescale:
+            for nm, val in zip(a,b):
+                exec(nm + "= " + str(val))
+            if len(values) == 2:
+                lb += str(1.0*k/L)
+            elif len(values) == 3:
+                lb += str((1.0*k/L)**sigma*W)[0:5]
         return lb
+    
+    def getAxis(self,X,Y):
+        """
+        return the proper axis limits for the plots
+        """
+        out = []
+        mM = [(min(X),max(X)),(min(Y),max(Y))]
+        for i,j in mM:
+            log_i = scipy.log10(i)
+            d, I = scipy.modf(log_i)
+            if log_i < 0:
+                add = 0.5 *(scipy.absolute(d)<0.5)
+            else:
+                add = 0.5 *(scipy.absolute(d)>0.5)
+            m = scipy.floor(log_i) + add
+            out.append(10**m)
+            log_j = scipy.log10(j)
+            d, I = scipy.modf(log_j)
+            if log_j < 0:
+                add = - 0.5 *(scipy.absolute(d)>0.5)
+            else:
+                add = - 0.5 *(scipy.absolute(d)<0.5)
+            m = scipy.ceil(log_j) + add
+            out.append(10**m)
+        return tuple(out)
         
     def PlotFunctions(self, parameterValues=None, plotCollapse = False, 
-                 fontSizeLabels = 18, pylabLegendLoc=(0.,0.)):
+                fontSizeLabels = 18, pylabLegendLoc=(0.,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         # XXX Having problems with pylab.ioff()
@@ -268,12 +371,21 @@ class Model:
                 Y = self.data.Y[independentValues]
                 if plotCollapse:
                     X = self.data.X[independentValues]
-                    Y = self.theory.ScaleY(X,Y,parameterValues,independentValues)
+                    Y = self.theory.ScaleY(X,Y,parameterValues,\
+                                           independentValues)
                 minY = min(minY,min(Y))
         
         #pylab.plot([],label=r'$win (k/L)^{\sigma_k \zeta}$')
         
-        for independentValues in self.data.experiments:
+        if self.sorting:
+            # preserve order of values as provided
+            # by Utils.get_independent
+            data_experiments = self.data.experiments
+        else:
+            # set sorted 
+            data_experiments = sorted(self.data.experiments)
+            
+        for independentValues in data_experiments:
             X = self.data.X[independentValues]
             Y = self.data.Y[independentValues]
             Ytheory = self.theory.Y(X, parameterValues, independentValues)
@@ -281,24 +393,23 @@ class Model:
             errorBar = self.data.errorBar[independentValues]
             if plotCollapse:
                 # Scaled error bars and Y need not-rescaled X
-                errorBar = self.theory.ScaleY(X, errorBar, parameterValues, independentValues)
+                errorBar = self.theory.ScaleY(X, errorBar, parameterValues, \
+                                              independentValues)
                 Y = self.theory.ScaleY(X, Y, parameterValues, independentValues)
-                Ytheory = self.theory.ScaleY(X, Ytheory, parameterValues, independentValues)
+                Ytheory = self.theory.ScaleY(X, Ytheory, \
+                                             parameterValues, independentValues)
                 # Then rescale X too
                 X = self.theory.ScaleX(X, parameterValues, independentValues)
                 
             # Avoid error bars crossing zero on log-log plots
             if self.data.linlog == 'log':
-                errorBarDown = errorBar * (errorBar < Y) + (Y -minY) * (errorBar > Y)                
+                errorBarDown = errorBar * (errorBar < Y) + (Y -minY) * (errorBar > Y)
                 y_error=[errorBarDown,errorBar]
             else:
                 y_error=errorBar
                 
             # Prepare the labels
-            #lb = self.getLabel(self.theory.independentNames, independentValues)
-            k, L, win = independentValues
-            lb = str(k)+','+str(L)+','+str(win)+','+str((1.0*k/L)**(0.387)*win)[0:5]
-            #lb = str((1.0*k/L)**(0.387)*win)[0:5]
+            lb = self.getLabel(self.theory.independentNames, independentValues)
             pylab.rcParams.update({'legend.fontsize':12})
             #####################
             if self.data.linlog == 'log' or self.data.linlog == 'lin':
@@ -307,29 +418,52 @@ class Model:
                 elif self.data.linlog == 'lin':
                     plot_fn = getattr(pylab,'plot')
                 # Plot first data with their error
-                plot_fn(X,Y,pointType[1]) # This is needed to get the correct axis
+                plot_fn(X,Y,pointType[1])
                 pylab.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
+                axis_dep = self.getAxis(X,Y)
                 # Get the current values of the axis
-                for i, Ax in enumerate(pylab.axis()):
+                for i, Ax in enumerate(axis_dep):
                     ax0[i] = i%2 and max(ax0[i],Ax) or min(ax0[i],Ax)
                 # Plot the theory function
                 plot_fn(X,Ytheory,pointType[0])
             else:
-                 print "Format " + self.data.linlog + \
+                print "Format " + self.data.linlog + \
                         " not supported yet in PlotFits"
                 
         pylab.axis(tuple(ax0))
         pylab.legend(loc=pylabLegendLoc, ncol=2)
         #pylab.legend(loc=pylabLegendLoc)
         if plotCollapse:
-            pylab.xlabel(self.theory.scalingXTeX, fontsize = fontSizeLabels)
-            pylab.ylabel(self.theory.scalingYTeX, fontsize = fontSizeLabels)
+            pylab.xlabel(self.theory.scalingXTeX, fontsize=fontSizeLabels)
+            pylab.ylabel(self.theory.scalingYTeX, fontsize=fontSizeLabels)
             pylab.title(self.theory.scalingTitle)
         else:
-            pylab.xlabel(self.theory.Xname, fontsize = fontSizeLabels)
-            pylab.ylabel(self.theory.Yname, fontsize = fontSizeLabels)
-            pylab.title(self.theory.title, fontsize = fontSizeLabels)
+            pylab.xlabel(self.theory.Xname, fontsize=fontSizeLabels)
+            pylab.ylabel(self.theory.Yname, fontsize=fontSizeLabels)
+            pylab.title(self.theory.title, fontsize=fontSizeLabels)
         # XXX Turn on if ioff used pylab.ion()
+        pylab.ion()
+        pylab.show()
+        
+    def PlotResiduals(self, parameterValues=None, \
+                      fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
+        if parameterValues is None:
+            parameterValues = self.theory.initialParameterValues
+        pylab.ioff()
+        pylab.clf()
+        residuals = self.Residual(parameterValues, dictResidual=True)
+        x0 = 0
+        for independentValues in sorted(residuals):
+            res = residuals[independentValues]
+            xStep = len(res)
+            x = range(x0,x0+xStep)
+            x0 += xStep
+            pointType = self.data.pointType[independentValues]
+            lb = self.getLabel(self.theory.independentNames, independentValues)
+            pylab.plot(x,res,pointType, label=lb)
+        pylab.ylabel("Weighted residuals")
+        pylab.axhline(y=0,color='k')
+        pylab.legend(loc=pylabLegendLoc)
         pylab.ion()
         pylab.show()
         
@@ -337,7 +471,7 @@ class Model:
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         out = scipy.optimize.minpack.leastsq(self.Residual, \
-                initialParameterValues, full_output=1) 
+                initialParameterValues, full_output=1, ftol=1.e-16) 
         return out[0]
     
     def PlotBestFit(self, initialParameterValues = None, \
@@ -347,22 +481,14 @@ class Model:
         print 'initial cost = ', self.Cost(initialParameterValues)
         optimizedParameterValues = self.BestFit(initialParameterValues)
         print 'optimized cost = ', self.Cost(optimizedParameterValues)
+        print 'R-value = ', self.R_square(optimizedParameterValues)
         for name, val in \
                 zip(self.theory.parameterNameList,optimizedParameterValues):
             print name + " = ", val
         pylab.figure(figFit)
         self.PlotFunctions(optimizedParameterValues)
         pylab.figure(figCollapse)
-        self.PlotFunctions(optimizedParameterValues, plotCollapse = True)
-        # XXX JPS: Why do I need to do this to raise figures?
-        pylab.figure(figFit)
-        #pylab.xlabel(self.theory.Xname, fontsize=fontSizeLabels)
-        #pylab.ylabel(self.theory.Yname, fontsize=fontSizeLabels)
-        #pylab.title(self.theory.title, fontsize=fontSizeLabels)
-        pylab.figure(figCollapse)
-        #pylab.xlabel(self.theory.scalingXTeX, fontsize=fontSizeLabels)
-        #pylab.ylabel(self.theory.scalingYTeX, fontsize=fontSizeLabels)
-        #pylab.title(self.theory.scalingTitle, fontsize=fontSizeLabels)        
+        self.PlotFunctions(optimizedParameterValues, plotCollapse = True)        
         return optimizedParameterValues
 
 class CompositeModel:
@@ -396,7 +522,7 @@ class CompositeModel:
                 else:
                     th.parameterNames += "," + param
                 th.initialParameterValues.append(init)
-            else:      
+            else:
                 # Check if shared param has consistent initial value
                 # between models
                 paramCurrentIndex = th.parameterNameList.index(param)
@@ -408,36 +534,66 @@ class CompositeModel:
                      + " \n disagrees with value %f"%(paramCurrentInitialValue)\
                      + " already stored for previous theory in " \
                      + " CompositeTheory.\n Ignoring new value."
+                    
+        th.initialParameterValues = tuple(th.initialParameterValues)
         #
         # Update list of parameter names and values for all attached models
         #
         for currentModel in self.Models.values():
             currentModel.theory.parameterNames=th.parameterNames
             currentModel.theory.parameterNameList=th.parameterNameList
-            currentModel.theory.initialParameterValues=th.initialParameterValues
-
-    def SetFixedParams(self, fixedParamNames):
+            currentModel.theory.initialParameterValues=tuple(th.initialParameterValues)
+        #
+        # Remember original Names and values
+        th.initialParameterValues0 = copy.copy(th.initialParameterValues)
+        th.parameterNames0 = copy.copy(th.parameterNames)
+        th.parameterNameList0 = copy.copy(th.parameterNameList)
+        
+    def SetFixedParams(self, fixedParameters):
         """
-        Sets parameters in fixedParamNames to their initial values, and updates the parameter values, names of the composite model
+        Sets parameters in fixedParamNames to their initial values,
+        and updates the parameter values, names of the composite model
+        fixedParameters is a list of tuple(s) of the type: [('par1', val1)]
         """
+        th = self.theory
+        pNames, pValues = Utils.reduceParameters(th.parameterNames0,\
+                                                 th.initialParameterValues0,\
+                                                 fixedParameters)
+        th.parameterNames = pNames
+        th.parameterNameList = pNames.split(",")
+        th.initialParameterValues = pValues
         for model in self.Models.values():
-            model.theory.SetFixedParams(fixedParamNames)
-            self.theory.parameterNames = model.theory.parameterNames
-            self.theory.parameterNameList = model.theory.parameterNameList
-            self.theory.initialParameterValues = model.theory.initialParameterValues
+            model.theory.SetFixedParams(fixedParameters)
 
+            
     def Residual(self, parameterValues):
-        residuals = []
+        residuals = scipy.array([])
         for model in self.Models.values():
             modelResidual = model.Residual(parameterValues)
-            residuals = residuals + list(modelResidual)
-        return scipy.array(residuals)
+            residuals = scipy.concatenate((residuals,modelResidual))
+        return residuals
         
     def Cost(self, parameterValues=None):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         residuals = self.Residual(parameterValues)
         return sum(residuals*residuals)
+        #return sum(scipy.absolute(residuals))
+    
+    def SST(self, parameterValues=None):
+        sst = 0.
+        for model in self.Models.values():
+            sst += model.SST(parameterValues)        
+        return sst
+        
+    def R_square(self,parameterValues):
+        """
+        Calculates the R-square = 1 - cost / SST
+        where SST is the sum of the squares about the mean
+        """
+        sst = self.SST(parameterValues)
+        cost = self.Cost(parameterValues)
+        return 1.- cost/sst
         
     def PlotFits(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.), figNumStart=1):
@@ -459,35 +615,59 @@ class CompositeModel:
         for model in self.Models.values():
             figNum+=1
             pylab.figure(figNum)
-            model.PlotFunctions(parameterValues, fontSizeLabels, pylabLegendLoc, plotCollapse = True)
+            model.PlotFunctions(parameterValues, fontSizeLabels, \
+                                pylabLegendLoc, plotCollapse = True)
             pylab.figure(figNum)
             
-    def BestFit(self,initialParameterValues = None):
+    def BestFit(self,initialParameterValues=None):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
-        out = scipy.optimize.minpack.leastsq(self.Residual, initialParameterValues, full_output=1) 
-        return out[0]
+        out = scipy.optimize.minpack.leastsq(self.Residual, \
+                initialParameterValues, full_output=1, ftol = 1e-16) 
+        return out
         
-    def PlotBestFit(self, initialParameterValues = None, \
-                    figNumStart = 1):
+    def PlotBestFit(self, initialParameterValues=None, \
+                    figNumStart = 1, fixedParams = None):
+        if fixedParams:
+            if not isinstance(fixedParams, list):
+                fixedParams = [fixedParams]
+            self.SetFixedParams(fixedParams)
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         print 'initial cost = ', self.Cost(initialParameterValues)
-        optimizedParameterValues = self.BestFit(initialParameterValues)
+        out = self.BestFit(initialParameterValues)
+        optimizedParameterValues = out[0]
+        covar = out[1]
+        errors = [covar[i,i]**0.5 for i in range(len(covar))]
+        inv_t_student = scipy.special.stdtrit(len(errors),0.90)
         print 'optimized cost = ', self.Cost(optimizedParameterValues)
+        print 'optimized SST = ', self.SST(optimizedParameterValues)
+        print 'R-value = ', self.R_square(optimizedParameterValues)
+        print
+        if fixedParams:
+            print "=== Fixed parameters ================"
+            for pName,pValue in fixedParams:
+                print "%s = %2.2f" % (pName, pValue)
         # Print parameter values
-        for name, val in \
-                zip(self.theory.parameterNameList,optimizedParameterValues):
-            print name + " = ", val
+        print "=== Fitting parameters =============="
+        for name, val, error in \
+                zip(self.theory.parameterNameList,optimizedParameterValues, errors):
+            print "%8s = %2.3f +/- %2.3f" %(name, val, inv_t_student*error)
+        print "====================================="
+        #
+        # Print plots
+        #
         figNum = figNumStart-1
         for model in self.Models.values():
+            for FT in [False,True]:
+                figNum+=1
+                pylab.figure(figNum)
+                model.PlotFunctions(optimizedParameterValues, plotCollapse = FT)
+                # Weird bug: repeating figure needed to get to show
+                pylab.figure(figNum)
             figNum+=1
             pylab.figure(figNum)
-            model.PlotFunctions(optimizedParameterValues, plotCollapse = False)
-            # Weird bug: repeating figure needed to get to show
+            model.PlotResiduals(optimizedParameterValues)
             pylab.figure(figNum)
-            figNum+=1
-            pylab.figure(figNum)
-            model.PlotFunctions(optimizedParameterValues, plotCollapse = True)
-            pylab.figure(figNum)
-        return optimizedParameterValues
+        #return optimizedParameterValues
+        return out

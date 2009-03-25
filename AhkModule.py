@@ -1,38 +1,51 @@
-import SloppyScaling
-reload(SloppyScaling)
 from scipy import exp
-
-# Includes dataDirectory, independentNames, independentValues,
-# and Symbol, Color dictionaries
+import os
 import WindowScalingInfo as WS
 reload(WS)
+import SloppyScaling
+reload(SloppyScaling)
+import Utils
+reload(Utils)
+
 
 name = 'A_h_k' # This is the name used in the files
-Ytheory = "(h*k**(zeta*sigma_k))**((2.-tau)*(1.+zeta)/zeta) \
-            *(1./h)*exp(-((h*k**(zeta*sigma_k))*Ixh_0)**nh)"
-Ytheory_corrections = "exp(Ah1/h+Ah2/h**2) \
-                 *exp(Uh1*(h*k**(zeta*sigma_k)) + Uh2/(h*k**(zeta*sigma_k)))"
+
 Xname = 'h'
+XscaledName = 'hs'
+Xscaled = "h*k**(zeta*sigma_k)"
+XscaledTeX = r'$h k^{\zeta \sigma_k}$'
+
 Yname = 'Ahk' # This must be the name of the module !!!!!!!!!
-# XXX Might want a YTeX name too?
-scalingX = "h*k**(zeta*sigma_k)"
-scalingXTeX = r'$h k^{\zeta \sigma_k}$'
-scalingY = \
-        "(h*k**(zeta*sigma_k))**(-(2.-tau)*(1.+zeta)/zeta) * h * Ahk"
-scalingYTeX = \
-   r'$(h k^{\zeta \sigma_k})^{-(2.-\tau) (1.+\zeta)/\zeta} h {\cal{A}}_{hk}$'
+Ytheory = "hs**((2.-tau)*(1.+zeta)/zeta) \
+            /h *exp(-(hs*Ixh_0)**nh)"
+Yscaled = "hs**(-(2.-tau)*(1.+zeta)/zeta) * h * Ahk"
+YscaledTeX = \
+   r'$(h k^{\zeta \sigma_k})^{-(2-\tau) (1+\zeta)/\zeta} h {\cal{A}}_{hk}$'
+
 title = 'A(h,k): Area covered by avalanches of height h'
 scalingTitle = 'A(h,k) scaling function'
-# XXX Ixh_1 and Ixw_1 aren't used yet? More natural names?
+
+
+#
+# Include corrections
+#
+Ytheory_corrections = "exp(Ah1/h+Ah2/h**2) \
+                 *exp(Uh1*(h*k**(zeta*sigma_k)) + Uh2/(h*k**(zeta*sigma_k)))"
+
 parameterNames = "tau,sigma_k,zeta,Ixh_0,nh"
 parameterNames_corrections = "Ah1,Ah2,Uh1,Uh2"
 initialParameterValues = (1.2,0.4,0.6,2e-2,1.4)
 initialParameterValues_corrections = (0.,0.,0.,0.)
 
+# Correct if spaces are included in the parameters names
+parameterNames = parameterNames.replace(" ","")
+parameterNames_corrections = parameterNames_corrections.replace(" ","")
+
 if WS.corrections_to_scaling:
     Ytheory = Ytheory + "*" + Ytheory_corrections
     parameterNames = parameterNames + "," + parameterNames_corrections
     initialParameterValues = initialParameterValues + initialParameterValues_corrections
+
 
 
 # If single independent parameter, must have comma after it -- makes it a tuple
@@ -43,19 +56,29 @@ theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 scalingYTeX = scalingYTeX, \
                 title = title, \
                 scalingTitle = scalingTitle, \
-                Xname=Xname, Yname=Yname, normalization = WS.normalization)
+                Xname=Xname, XscaledName=XscaledName, \
+                Yname=Yname, \
+                fixParameter = WS.fixParameter,\
+                fixedParameters = WS.fixedParameters, \
+                normalization = WS.normalization)
 
 data = SloppyScaling.Data()
-for k in WS.independentValues:
-    fileName = WS.dataDirectory + name + str(k) \
-        + "_" + WS.systemSize + "_"+ WS.simulType + ".bnd"
-    independent = (k,) # Must be a tuple
+
+for independent in WS.independentValues:
+    L, k = independent
+    ext =  "_" + WS.simulType + ".bnd"
+    if os.getlogin() == 'yj':
+        k_string = "_k"
+    else:
+        k_string = "_k="
+    fileName = "".join([WS.dataDirectory,name,\
+                        k_string,str(k), "_System_Size=",str(2*L), "x", str(L), ext])
     data.InstallCurve(independent, fileName, \
-        pointSymbol=WS.Symbol[k], \
-        pointColor=WS.Color[k], \
+        pointSymbol=WS.Symbol[independent], \
+        pointColor=WS.Color[independent], \
         initialSkip = WS.rows_to_skip)
 
 f = __file__
 f = f.split("/")[-1]
 thisModule = f.split('Module.py')[0]
-exec(thisModule + "= SloppyScaling.Model(theory, data, name)")
+exec(thisModule + "= SloppyScaling.Model(theory, data, name, WS.sortedValues)")

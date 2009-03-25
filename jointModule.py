@@ -16,4 +16,3 @@ for moduleName in WS.moduleNames:
     exec("obj_mod = "+moduleName)
     m = getattr(obj_mod,moduleName)
     jointModule.InstallModel(moduleName, m)
-

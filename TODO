@@ -1,7 +1,24 @@
 TODO list
 
+
+
+* 
+Version 10:
+Order and names of variables changed from "k,L,Win" to "L,k,W"
+Function getLabels rewritten to take care of all the possible labels (also with rescaled variables)
+Labels are ordered using Utils.get_independent otherwise plots use ordering of the keys (L, k, W)
+
+Plot of the residuals
+Introduced SST and R_square (not yet valid)
+
+Before version 10:
 * Change .bin to .bnd as a file extention (Done)
 * Axes scale control for point, not for lines (Done)
-* Create JoinModule.py to replace AwkAhkModule and set variables to load the propert modules
+* Create JoinModule.py to replace AwkAhkModule and set variables to load the propert modules (Done)
 
 
+BUGS TO FIX
+* rowstoSkip skip the first rows ONLY in the fits
+* Data filenames are not unique: some have "k=0001", others "k0001"; partially fixed in each module
+* Calculation of SST and R_square
+* Use of Xsname in SloppyScaling
