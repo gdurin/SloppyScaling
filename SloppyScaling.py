@@ -133,8 +133,6 @@ class ScalingTheory:
         fixedParameters is a list of tuple(s) of the type:
         [('param1', val1), ('param2', val2)]
         """
-        if not isinstance(fixedParameters,list):
-            fixedParameters = [fixedParameters]
         # Set first the fixParameter to true and
         # pass the parameters to fix
         if not self.fixParameter:
@@ -147,7 +145,6 @@ class ScalingTheory:
                                            fixedParameters)
         self.parameterNamesList = ",".join(self.parameterNames)
         self.fixedParameters = fixedParameters
-        print self.fixedParameters
     #
     # Various options for normalization
     #
@@ -231,6 +228,7 @@ class Data:
             infile = open(fileName, 'r')
             lines = infile.readlines()
             infile.close()
+            success = 1
             numbers = [line.split() for line in lines]
             self.X[independent] = scipy.array( \
                         [float(line[xCol]) for line in numbers])
@@ -244,6 +242,8 @@ class Data:
                     self.Y[independent] * defaultFractionalError
         except IOError:
             print "File %s not found"%fileName
+            success = 0
+        return success
 
 class Model:
     """
@@ -509,6 +509,7 @@ class CompositeModel:
         self.Models = {}
         self.theory = self.CompositeTheory()
         self.name = name
+        self.SetFixedParamsPass = False
         
     def InstallModel(self,modelName, model):
         self.Models[modelName] = model
@@ -517,10 +518,6 @@ class CompositeModel:
                                 model.theory.initialParameterValues):
             if param not in th.parameterNameList:
                 th.parameterNameList.append(param)
-                if len(th.parameterNames) == 0:
-                    th.parameterNames += param
-                else:
-                    th.parameterNames += "," + param
                 th.initialParameterValues.append(init)
             else:
                 # Check if shared param has consistent initial value
@@ -535,14 +532,18 @@ class CompositeModel:
                      + " already stored for previous theory in " \
                      + " CompositeTheory.\n Ignoring new value."
                     
-        th.initialParameterValues = tuple(th.initialParameterValues)
+        th.parameterNames = ",".join(th.parameterNameList)
+        #th.initialParameterValues = tuple(th.initialParameterValues)
         #
         # Update list of parameter names and values for all attached models
         #
         for currentModel in self.Models.values():
             currentModel.theory.parameterNames=th.parameterNames
+            currentModel.theory.parameterNames0=th.parameterNames
             currentModel.theory.parameterNameList=th.parameterNameList
+            currentModel.theory.parameterNameList0=th.parameterNameList
             currentModel.theory.initialParameterValues=tuple(th.initialParameterValues)
+            currentModel.theory.initialParameterValues0=tuple(th.initialParameterValues)
         #
         # Remember original Names and values
         th.initialParameterValues0 = copy.copy(th.initialParameterValues)
@@ -556,15 +557,28 @@ class CompositeModel:
         fixedParameters is a list of tuple(s) of the type: [('par1', val1)]
         """
         th = self.theory
-        pNames, pValues = Utils.reduceParameters(th.parameterNames0,\
+        if fixedParameters:
+            pNames, pValues = Utils.reduceParameters(th.parameterNames0,\
                                                  th.initialParameterValues0,\
                                                  fixedParameters)
-        th.parameterNames = pNames
-        th.parameterNameList = pNames.split(",")
-        th.initialParameterValues = pValues
-        for model in self.Models.values():
-            model.theory.SetFixedParams(fixedParameters)
-
+            th.parameterNames = pNames
+            th.parameterNameList = pNames.split(",")
+            th.initialParameterValues = pValues
+            for currentModel in self.Models.values():
+                currentModel.theory.fixParameter = True
+                currentModel.theory.SetFixedParams(fixedParameters)
+            self.SetFixedParamsPass = True
+        else:
+            if self.SetFixedParamsPass:
+                th.parameterNames = th.parameterNames0
+                th.parameterNameList = th.parameterNameList0
+                th.initialParameterValues = th.initialParameterValues0
+                for currentModel in self.Models.values():
+                    currentModel.theory.parameterNames=th.parameterNames0
+                    currentModel.theory.parameterNameList=th.parameterNameList0
+                    currentModel.theory.initialParameterValues=th.initialParameterValues0
+                    currentModel.theory.fixParameter = False
+                    currentModel.theory.fixedParameters = None
             
     def Residual(self, parameterValues):
         residuals = scipy.array([])
@@ -628,12 +642,27 @@ class CompositeModel:
         
     def PlotBestFit(self, initialParameterValues=None, \
                     figNumStart = 1, fixedParams = None):
+        
         if fixedParams:
             if not isinstance(fixedParams, list):
                 fixedParams = [fixedParams]
-            self.SetFixedParams(fixedParams)
+            # Check now if the name is correct
+            l_index = []
+            for index, par in enumerate(fixedParams):
+                pName, pValue = par
+                if pName not in self.theory.parameterNameList0:
+                    print "%s is not a valid name. Ignored" % pName
+                    l_index.append(index)
+            if l_index:
+                for i in l_index:
+                    fixedParams.pop(i)
+                    
+        # Call setfixedParams even if fixedParams = None to check
+        # if original Names and values have to be used
+        self.SetFixedParams(fixedParams)
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
+
         print 'initial cost = ', self.Cost(initialParameterValues)
         out = self.BestFit(initialParameterValues)
         optimizedParameterValues = out[0]
@@ -645,6 +674,8 @@ class CompositeModel:
         print 'R-value = ', self.R_square(optimizedParameterValues)
         print
         if fixedParams:
+            if not isinstance(fixedParams, list):
+                fixedParams = [fixedParams]
             print "=== Fixed parameters ================"
             for pName,pValue in fixedParams:
                 print "%s = %2.2f" % (pName, pValue)
@@ -652,7 +683,7 @@ class CompositeModel:
         print "=== Fitting parameters =============="
         for name, val, error in \
                 zip(self.theory.parameterNameList,optimizedParameterValues, errors):
-            print "%8s = %2.3f +/- %2.3f" %(name, val, inv_t_student*error)
+            print "%7s = %2.3f +/- %2.3f" %(name, val, inv_t_student*error)
         print "====================================="
         #
         # Print plots

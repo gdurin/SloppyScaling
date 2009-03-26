@@ -8,7 +8,7 @@ import Utils
 reload(Utils)
 
 
-name = 'A_h_k' # This is the name used in the files
+name = 'A_h' # This is the name used in the files
 
 Xname = 'h'
 XscaledName = 'hs'
@@ -51,19 +51,18 @@ if WS.corrections_to_scaling:
 # If single independent parameter, must have comma after it -- makes it a tuple
 theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 initialParameterValues, WS.independentNames, \
-                scalingX = scalingX, scalingY = scalingY, \
-                scalingXTeX = scalingXTeX, \
-                scalingYTeX = scalingYTeX, \
+                scalingX = Xscaled, scalingY = Yscaled, \
+                scalingXTeX = XscaledTeX, \
+                scalingYTeX = YscaledTeX, \
                 title = title, \
                 scalingTitle = scalingTitle, \
                 Xname=Xname, XscaledName=XscaledName, \
                 Yname=Yname, \
-                fixParameter = WS.fixParameter,\
-                fixedParameters = WS.fixedParameters, \
                 normalization = WS.normalization)
 
 data = SloppyScaling.Data()
 
+loaded = 0
 for independent in WS.independentValues:
     L, k = independent
     ext =  "_" + WS.simulType + ".bnd"
@@ -73,10 +72,19 @@ for independent in WS.independentValues:
         k_string = "_k="
     fileName = "".join([WS.dataDirectory,name,\
                         k_string,str(k), "_System_Size=",str(2*L), "x", str(L), ext])
-    data.InstallCurve(independent, fileName, \
+    success = data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[independent], \
         pointColor=WS.Color[independent], \
         initialSkip = WS.rows_to_skip)
+    loaded += success
+
+nFiles = len(WS.independentValues)
+if loaded ==  nFiles:
+    print "Loaded %2d/%2d files (%s)" % (loaded, nFiles, name)
+else:
+    print "====================="
+    print "Attention! %2d/%2d files are missing (%s)" %  (nFiles-loaded, nFiles, name)
+    print "====================="
 
 f = __file__
 f = f.split("/")[-1]

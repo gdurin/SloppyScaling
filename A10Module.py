@@ -19,7 +19,7 @@ Yname = 'A10' # This must be the name of the module !!!
 Ytheory = "((1.0*k/L)**(sigma_k))**((2.-tau)*(1.+zeta))*s**(1.-tau+1./(1.+zeta))/W*exp(-(Ss*(Iy0+Iy1*W*(1.0*k/L)**(sigma_k)))**n)"
 Yscaled = \
         "((1.0*k/L)**(sigma_k))**(-(2.-tau)*(1.+zeta)) * s**(-1.+tau-1./(1.+zeta)) * W * A10"
-scalingYTeX = \
+YscaledTeX = \
    r'${\cal{A}_{10}} = ((k/L)^{\sigma_k})^{-(2-\tau) (1+\zeta)} s^{-1+\tau-1/(1+\zeta)} W A_{10}$'
 
 title = 'A(s,k,W): Area covered by avalanches of size s in window of width win'
@@ -49,19 +49,18 @@ if WS.corrections_to_scaling:
 # If single independent parameter, must have comma after it -- makes it a tuple
 theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 initialParameterValues, WS.independentNames, \
-                scalingX = scalingX, scalingY = scalingY, \
-                scalingXTeX = scalingXTeX, \
-                scalingYTeX = scalingYTeX, \
+                scalingX = Xscaled, scalingY = Yscaled, \
+                scalingXTeX = XscaledTeX, \
+                scalingYTeX = YscaledTeX, \
                 title = title, \
                 scalingTitle = scalingTitle, \
                 Xname=Xname, XscaledName=XscaledName, \
                 Yname=Yname, \
-                fixParameter = WS.fixParameter,\
-                fixedParameters = WS.fixedParameters, \
                 normalization = WS.normalization)
 
 data = SloppyScaling.Data()
 
+loaded = 0
 for independent in WS.independentValues:
     L, k, W = independent
     ext =  "_" + WS.simulType + ".bnd"
@@ -71,10 +70,19 @@ for independent in WS.independentValues:
         k_string = "_k="
     fileName = "".join([WS.dataDirectory,name,"_W=",str(W).rjust(4, str(0)),\
                         k_string,str(k), "_System_Size=",str(2*L), "x", str(L), ext])
-    data.InstallCurve(independent, fileName, \
+    success = data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[independent], \
         pointColor=WS.Color[independent], \
         initialSkip = WS.rows_to_skip)
+    loaded += success
+
+nFiles = len(WS.independentValues)
+if loaded ==  nFiles:
+    print "Loaded %2d/%2d files (%s)" % (loaded, nFiles, name)
+else:
+    print "====================="
+    print "Attention! %2d/%2d files are missing (%s)" %  (nFiles-loaded, nFiles, name)
+    print "====================="
 
 
 f = __file__

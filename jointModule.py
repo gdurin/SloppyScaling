@@ -11,6 +11,7 @@ for moduleName in WS.moduleNames:
 
 jointModuleName = "".join(WS.moduleNames)
 
+print jointModuleName
 jointModule = SloppyScaling.CompositeModel(jointModuleName)
 for moduleName in WS.moduleNames:
     exec("obj_mod = "+moduleName)

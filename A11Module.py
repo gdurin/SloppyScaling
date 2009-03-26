@@ -68,12 +68,11 @@ theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 scalingTitle = scalingTitle, \
                 Xname=Xname, XscaledName=XscaledName, \
                 Yname=Yname, \
-                fixParameter = WS.fixParameter,\
-                fixedParameters = WS.fixedParameters, \
                 normalization = WS.normalization)
 
 data = SloppyScaling.Data()
 
+loaded = 0
 for independent in WS.independentValues:
     L, k, W = independent
     ext =  "_" + WS.simulType + ".bnd"
@@ -83,10 +82,18 @@ for independent in WS.independentValues:
         k_string = "_k="
     fileName = "".join([WS.dataDirectory,name,"_W=",str(W).rjust(4, str(0)),\
                         k_string,str(k), "_System_Size=",str(2*L), "x", str(L), ext])
-    data.InstallCurve(independent, fileName, \
+    success = data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[independent], \
         pointColor=WS.Color[independent], \
         initialSkip = WS.rows_to_skip)
+    loaded += success
+
+if loaded ==  nFiles:
+    print "Loaded %2d/%2d files (%s)" % (loaded, nFiles, name)
+else:
+    print "====================="
+    print "Attention! %2d/%2d files are missing (%s)" %  (nFiles-loaded, nFiles, name)
+    print "====================="
 
 f = __file__
 f = f.split("/")[-1]
