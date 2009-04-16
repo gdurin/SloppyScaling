@@ -6,8 +6,7 @@ import scipy.optimize
 import scipy.special
 import WindowScalingInfo as WS
 reload(WS)
-import Utils
-reload(Utils)
+
 
 
 class ScalingTheory:
@@ -33,35 +32,43 @@ class ScalingTheory:
                 scalingYTeX = r'$D S^\tau$',
                 title= 'Avalanche histo$'
                 scalingTitle= 'Avalanche histo scaling plot'
-                Xname = 'S', Xsname='Ss', Yname = 'D', normalization = True)
+                Xname = 'S', XscaledName='Ss', Yname = 'D', normalization = True)
     """
     def __init__(self, Ytheory, parameterNames, initialParameterValues, \
                  independentNames, \
-                 scalingX = 'X', scalingY = 'Y', \
+                 scalingX = 'X', scalingY = 'Y', scalingW = None, \
                  scalingXTeX = r'${\cal{X}}$', \
                  scalingYTeX = r'${\cal{Y}}$', \
                  title = 'Fit', scalingTitle = 'Scaling Collapse',
-                 Xname='X', XscaledName = None, Yname='Y', \
-                 fixParameter = False, fixedParameters = "", \
+                 Xname='X', XscaledName = 'Xs', Yname='Y', WscaledName = 'Ws',\
+                 heldParameterBool = False, heldParameterList = "", heldParameterPass = False,
                  normalization = None):
+        #YJC: added WscaledName = 'Ws' and scalingW =None to theory
+        # to make the scaling function easier to read, need to keep default none for scalingW,
+        #because some theories don't have this second variable
+        #YJC: want to make the scaling variables a list?  So we can specify as many as we want
         self.Ytheory = Ytheory
         self.parameterNames = parameterNames
         self.parameterNameList = parameterNames.split(",")
         self.initialParameterValues = initialParameterValues
-        self.parameterNames0 = parameterNames
+        self.parameterNames0 = parameterNames 
+        self.parameterNameList0 = self.parameterNameList
         self.initialParameterValues0 = initialParameterValues
         self.independentNames = independentNames
         self.Xname = Xname
         self.XscaledName = XscaledName
         self.Yname = Yname
+        self.WscaledName = WscaledName
         self.scalingX = scalingX
         self.scalingY = scalingY
+        self.scalingW = scalingW
         self.scalingXTeX = scalingXTeX
         self.scalingYTeX = scalingYTeX
         self.title = title
         self.scalingTitle = scalingTitle
         self.normalization = normalization
-        self.fixParameter = False
+        self.heldParameterBool = heldParameterBool
+        self.heldParameterPass = heldParameterPass
 
     def Y(self, X, parameterValues, independentValues):
         """
@@ -74,14 +81,15 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        #if len(self.fixedParamNamesList) > 0:
-        #    exec(self.fixedParamNames + "= self.fixedParamValues")
-        if self.fixParameter:
-            for par, val in self.fixedParameters:
+        if self.heldParameterBool:
+            for par, val in self.heldParameterList:
                 exec(par + " = " + str(val))
         exec(self.Xname + ' = X')
         if self.XscaledName:
-            exec(self.XscaledName +'='+ self.scalingX) 
+            exec(self.XscaledName +'='+ self.scalingX)
+        #YJC: added scalingW here
+        if self.scalingW:
+            exec(self.WscaledName +"="+ self.scalingW)
         exec("Y = " + self.Ytheory)
         if self.normalization:
             fn = getattr(self, self.normalization)
@@ -97,12 +105,13 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        #if len(self.fixedParamNamesList) > 0:
-        #    exec(self.fixedParamNames + "= self.fixedParamValues")
-        if self.fixParameter:
-            for par, val in self.fixedParameters:
+        if self.heldParameterBool:
+            for par, val in self.heldParameterList:
                 exec(par + " = " + str(val))
         exec(self.Xname + " = X")
+        #YJC: added scalingW here too
+        if self.scalingW is not None:
+            exec(self.WscaledName + '=' +self.scalingW)
         exec("XScale = " + self.scalingX)
         return XScale
 
@@ -115,36 +124,59 @@ class ScalingTheory:
         # 'parameterValues', 'independentValues', and 'X'
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
-        #if len(self.fixedParamNamesList) > 0:
-        #    exec(self.fixedParamNames + "= self.fixedParamValues")
-        if self.fixParameter:
-            for par, val in self.fixedParameters:
+        if self.heldParameterBool:
+            for par, val in self.heldParameterList:
                 exec(par + " = " + str(val))
         exec(self.Xname + " = X")
+        #YJC: added scalingW here too
+        if self.scalingW is not None:
+            exec(self.WscaledName + '=' +self.scalingW)
         if self.XscaledName:
             exec(self.XscaledName + "="+self.scalingX)
         exec(self.Yname + " = Y")
         exec("YScale = " + self.scalingY)
         return YScale
 
-    def SetFixedParams(self, fixedParameters):
+    def reduceParameters(self,pNames,pValues,heldParams):
+        list_params = pNames.split(",")
+        list_initials = list(pValues)
+        for param_to_remove, val in heldParams:
+            try:
+                index = list_params.index(param_to_remove)
+                list_params.pop(index)
+                list_initials.pop(index)
+            except ValueError:
+                print "Warning: parameter ", param_to_remove, " NOT included in the list"
+        return ",".join(list_params), tuple(list_initials)
+
+    def HoldFixedParams(self, heldParameters):
         """
-        Sets parameters to a fixed values.
-        fixedParameters is a list of tuple(s) of the type:
+        Sets parameters to fixed values.
+        heldParameters is a list of tuple(s) of the type:
         [('param1', val1), ('param2', val2)]
         """
-        # Set first the fixParameter to true and
-        # pass the parameters to fix
-        if not self.fixParameter:
-            self.fixParameter = True
         
-        # Then adjust the Names and the Values
-        self.parameterNames, self.initialParameterValues = \
-                    Utils.reduceParameters(self.parameterNames0, \
+        if heldParameters:
+            self.heldParameterBool = True
+            pNames, pValues = \
+                    self.reduceParameters(self.parameterNames0, \
                                            self.initialParameterValues0, \
-                                           fixedParameters)
-        self.parameterNamesList = ",".join(self.parameterNames)
-        self.fixedParameters = fixedParameters
+                                           heldParameters)
+            self.parameterNames = pNames
+            self.parameterNameList = pNames.split(",")
+            self.initialParameterValues = pValues
+            self.heldParameterList = heldParameters
+            self.heldParameterBool = True
+            self.heldParameterPass = True
+        else:
+            # Check if some parameters have been held before, and reset
+            if self.heldParameterPass:
+                self.parameterNames=self.parameterNames0
+                self.parameterNameList = self.parameterNameList0
+                self.initialParameterValues = self.initialParameterValues0
+                self.heldParameterBool = False
+                self.heldParameterList = None
+                
     #
     # Various options for normalization
     #
@@ -339,6 +371,9 @@ class Model:
         out = []
         mM = [(min(X),max(X)),(min(Y),max(Y))]
         for i,j in mM:
+            #YJC: checking if values are negative, if yes, return 0 and break
+            if j <0 or i <0:
+                return 0
             log_i = scipy.log10(i)
             d, I = scipy.modf(log_i)
             if log_i < 0:
@@ -358,7 +393,7 @@ class Model:
         return tuple(out)
         
     def PlotFunctions(self, parameterValues=None, plotCollapse = False, 
-                fontSizeLabels = 18, pylabLegendLoc=(0.,0.)):
+                fontSizeLabels = 18, fontSizeLegend=12, pylabLegendLoc=(0.,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         # XXX Having problems with pylab.ioff()
@@ -410,7 +445,7 @@ class Model:
                 
             # Prepare the labels
             lb = self.getLabel(self.theory.independentNames, independentValues)
-            pylab.rcParams.update({'legend.fontsize':12})
+            pylab.rcParams.update({'legend.fontsize':fontSizeLabels})
             #####################
             if self.data.linlog == 'log' or self.data.linlog == 'lin':
                 if self.data.linlog == 'log':
@@ -422,6 +457,10 @@ class Model:
                 pylab.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
                 axis_dep = self.getAxis(X,Y)
                 # Get the current values of the axis
+                # YJC: some values of binned data are negative, modified getAxis to check, and return 0 if negative values encountered 
+                if axis_dep ==0:
+                    print "this data set has negative values", independentValues
+                    print "\n"
                 for i, Ax in enumerate(axis_dep):
                     ax0[i] = i%2 and max(ax0[i],Ax) or min(ax0[i],Ax)
                 # Plot the theory function
@@ -472,23 +511,60 @@ class Model:
             initialParameterValues = self.theory.initialParameterValues
         out = scipy.optimize.minpack.leastsq(self.Residual, \
                 initialParameterValues, full_output=1, ftol=1.e-16) 
-        return out[0]
+        return out
     
     def PlotBestFit(self, initialParameterValues = None, \
-                    figFit = 1, figCollapse=2, fontSizeLabels=18):
+                    figFit = 1, figCollapse=2, fontSizeLabels=18, heldParams = None):
+        
+        #YJC: added abilitiy to set fixedParams for this, and also modified output to match what is done in composite theory
+
+        if heldParams:
+            if not isinstance(heldParams, list):
+                heldParams=[heldParams]
+            #Check now if the name is correct
+            l_index=[]
+            for index, par in enumerate(heldParams):
+                pName, pValue = par
+                if pName not in self.theory.parameterNameList0:
+                    print "%s is not a valid name. Ignored" %pName
+                    l_index.append(index)
+            if l_index:
+                for i in l_index:
+                    heldParams.pop(i)
+
+        # Call setHeldParams even if heldParams=None to 
+        # check if original Names and values have to be used
+
+        self.theory.HoldFixedParams(heldParams)
+   
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
+        
         print 'initial cost = ', self.Cost(initialParameterValues)
-        optimizedParameterValues = self.BestFit(initialParameterValues)
+        optimizedParameterValues = self.BestFit(initialParameterValues)[0]
+        covar = self.BestFit(initialParameterValues)[1]
+        errors = [covar[i,i]**0.5 for i in range(len(covar))]
         print 'optimized cost = ', self.Cost(optimizedParameterValues)
         print 'R-value = ', self.R_square(optimizedParameterValues)
-        for name, val in \
-                zip(self.theory.parameterNameList,optimizedParameterValues):
-            print name + " = ", val
+        
+        if heldParams:
+            print "====== Held Parameters ======"
+            for pName, pValue in heldParams:
+                print "%s = %2.2f" %(pName, pValue)
+
+        print "====== Fitted Parameters (with one sigma error) ======"
+        for name, val, error in \
+                zip(self.theory.parameterNameList,optimizedParameterValues, errors):
+            print name + "= %2.4f +/- %2.4f" %(val, error)
+        print "======================================================"
+
         pylab.figure(figFit)
         self.PlotFunctions(optimizedParameterValues)
         pylab.figure(figCollapse)
         self.PlotFunctions(optimizedParameterValues, plotCollapse = True)        
+        #YJC: need to call these twice to show figures properly
+        pylab.figure(figFit)
+        pylab.figure(figCollapse)
         return optimizedParameterValues
 
 class CompositeModel:
@@ -509,7 +585,7 @@ class CompositeModel:
         self.Models = {}
         self.theory = self.CompositeTheory()
         self.name = name
-        self.SetFixedParamsPass = False
+        self.heldParamsPass = False
         
     def InstallModel(self,modelName, model):
         self.Models[modelName] = model
@@ -550,26 +626,38 @@ class CompositeModel:
         th.parameterNames0 = copy.copy(th.parameterNames)
         th.parameterNameList0 = copy.copy(th.parameterNameList)
         
-    def SetFixedParams(self, fixedParameters):
+    def reduceParameters(self,pNames,pValues,heldParams):
+        list_params = pNames.split(",")
+        list_initials = list(pValues)
+        for param_to_remove, val in heldParams:
+            try:
+                index = list_params.index(param_to_remove)
+                list_params.pop(index)
+                list_initials.pop(index)
+            except ValueError:
+                print "Warning: parameter ", param_to_remove, " NOT included in the list"
+        return ",".join(list_params), tuple(list_initials)
+        
+    def HoldFixedParams(self, heldParameters):
         """
         Sets parameters in fixedParamNames to their initial values,
         and updates the parameter values, names of the composite model
-        fixedParameters is a list of tuple(s) of the type: [('par1', val1)]
+        heldParameters is a list of tuple(s) of the type: [('par1', val1)]
         """
         th = self.theory
-        if fixedParameters:
-            pNames, pValues = Utils.reduceParameters(th.parameterNames0,\
+        if heldParameters:
+            pNames, pValues = self.reduceParameters(th.parameterNames0,\
                                                  th.initialParameterValues0,\
-                                                 fixedParameters)
+                                                 heldParameters)
             th.parameterNames = pNames
             th.parameterNameList = pNames.split(",")
             th.initialParameterValues = pValues
             for currentModel in self.Models.values():
-                currentModel.theory.fixParameter = True
-                currentModel.theory.SetFixedParams(fixedParameters)
-            self.SetFixedParamsPass = True
+                currentModel.theory.heldParameterBool = True
+                currentModel.theory.HoldFixedParams(heldParameters)
+            self.heldParamsPass = True
         else:
-            if self.SetFixedParamsPass:
+            if self.heldParamsPass:
                 th.parameterNames = th.parameterNames0
                 th.parameterNameList = th.parameterNameList0
                 th.initialParameterValues = th.initialParameterValues0
@@ -577,8 +665,8 @@ class CompositeModel:
                     currentModel.theory.parameterNames=th.parameterNames0
                     currentModel.theory.parameterNameList=th.parameterNameList0
                     currentModel.theory.initialParameterValues=th.initialParameterValues0
-                    currentModel.theory.fixParameter = False
-                    currentModel.theory.fixedParameters = None
+                    currentModel.theory.heldParameterBool = False
+                    currentModel.theory.heldParameterList = None
             
     def Residual(self, parameterValues):
         residuals = scipy.array([])
@@ -641,25 +729,25 @@ class CompositeModel:
         return out
         
     def PlotBestFit(self, initialParameterValues=None, \
-                    figNumStart = 1, fixedParams = None):
+                    figNumStart = 1, heldParams = None):
         
-        if fixedParams:
-            if not isinstance(fixedParams, list):
-                fixedParams = [fixedParams]
+        if heldParams:
+            if not isinstance(heldParams, list):
+                heldParams = [helddParams]
             # Check now if the name is correct
             l_index = []
-            for index, par in enumerate(fixedParams):
+            for index, par in enumerate(heldParams):
                 pName, pValue = par
                 if pName not in self.theory.parameterNameList0:
                     print "%s is not a valid name. Ignored" % pName
                     l_index.append(index)
             if l_index:
                 for i in l_index:
-                    fixedParams.pop(i)
+                    heldParams.pop(i)
                     
-        # Call setfixedParams even if fixedParams = None to check
+        # Call HoldFixedParams even if heldParams = None to check
         # if original Names and values have to be used
-        self.SetFixedParams(fixedParams)
+        self.HoldFixedParams(heldParams)
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
 
@@ -668,22 +756,22 @@ class CompositeModel:
         optimizedParameterValues = out[0]
         covar = out[1]
         errors = [covar[i,i]**0.5 for i in range(len(covar))]
-        inv_t_student = scipy.special.stdtrit(len(errors),0.90)
+        #inv_t_student = scipy.special.stdtrit(len(errors),0.90)
+        #errors = inv_t_student*errors
         print 'optimized cost = ', self.Cost(optimizedParameterValues)
         print 'optimized SST = ', self.SST(optimizedParameterValues)
         print 'R-value = ', self.R_square(optimizedParameterValues)
         print
-        if fixedParams:
-            if not isinstance(fixedParams, list):
-                fixedParams = [fixedParams]
-            print "=== Fixed parameters ================"
-            for pName,pValue in fixedParams:
+        if heldParams:
+            print "=== Held parameters ================"
+            for pName,pValue in heldParams:
                 print "%s = %2.2f" % (pName, pValue)
         # Print parameter values
-        print "=== Fitting parameters =============="
+        # YJC: changed printing here to print one sigma error instead of 95% confidence level
+        print "=== Fitting parameters (with one sigma error)=============="
         for name, val, error in \
                 zip(self.theory.parameterNameList,optimizedParameterValues, errors):
-            print "%7s = %2.3f +/- %2.3f" %(name, val, inv_t_student*error)
+            print "%7s = %2.3f +/- %2.3f" %(name, val, error)
         print "====================================="
         #
         # Print plots

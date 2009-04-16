@@ -1,56 +1,40 @@
 from scipy import exp
 import os
-import SloppyScaling
-reload(SloppyScaling)
 import WindowScalingInfo as WS
 reload(WS)
+import SloppyScaling
+reload(SloppyScaling)
 import Utils
 reload(Utils)
 
 
-name = 'A11' # This is the name used in the files
+name = 'A_s' # This is the name used in the files
 
 Xname = 's'
 XscaledName = 'Ss'
-Xscaled = '(s*(1.0*k/L)**(sigma_k*zeta)/W)'
-XscaledTeX = r'$s (k/L)^{\sigma_k \zeta}/W$'
-WscaledName = "Ws"
-Wscaled = '(W*(1.0*k/L)**(sigma_k))'
+Xscaled = "s*(1.0*k/L)**(sigma_k*(1.+zeta))"
+XscaledTeX = r'$s (k/L)^{(1+\zeta) \sigma_k}$'
 
-
-Yname = 'A11' # This must be the name of the module !!!
-Ytheory = 'Ss**((2.-tau)*(1.+zeta)/zeta)/s*exp(-1.0*Ss**nh*Ixh)'
-#Ytheory = Ss+'**((2.-tau)*(1.+zeta)/zeta)/s*exp(-1.0*('+Ss+'-c)**nh*Ixh)'
-Yscaled = 'Ss**((tau-2.)*(1.+zeta)/zeta)*s*A11'       
+Yname = 'Ask' # This must be the name of the module !!!!!!!!!
+Ytheory = " Ss**(2.-tau) * (1./s) * exp(-Ss**ns*Ixs)"
+Yscaled = "Ss **(tau-2.) * s * Ask"
 YscaledTeX = \
-   r'$(s (k/L)^{\sigma_k \zeta}/W)^{(\tau-2) (1+\zeta)/\zeta} s {\cal{A}_{11}}$'
+   r'$(s (k/L)^{\sigma_k (1+\zeta)})^{-(2-\tau)} s {\cal{A}}_{s}$'
 
-title = 'A11(s,k,W): Area covered by avalanches of size S in window of width W'
-scalingTitle = 'A11(s,k,W) scaling function'
+title = 'A(s,k,L): Area covered by avalanches of size s'
+scalingTitle = 'A(s,k,L) scaling function'
 
 
 #
 # Include corrections
 #
+Ytheory_corrections = "exp(Ah1/s+Ah2/s**2)"
+#*exp(Uh1*(h*k**(zeta*sigma_k)) + Uh2/(h*k**(zeta*sigma_k)))"
 
-Ytheory_corrections = "exp(U0-U1*Ws**n2/Ss**n3)"
-#Ytheory_corrections = "exp(U0-U1*"+Ws+"**n2/Ss**n3-Ux*"+Ws+"**n4/Ss**n5)"
-#Ytheory_corrections = "exp(U0-U1*"+Ws+"/(1.0*Ss)+U2*"+Ws+"/(1.0*Ss**2.))"
-#Ytheory_corrections = "exp(Ah1/s+Ah2/s**2)*exp(Uh1*(s*(1.0*k/L)**sigma_k/win**(1.+zeta)) + Uh2/(s*(k/L)**sigma_k/win**(1.+zeta)))"
-#
-
-
-
-parameterNames = "tau,sigma_k,zeta,Ixh,nh"
-parameterNames_corrections = "U0,U1,n2,n3"
-#parameterNames_corrections = "U0,U1,n2,n3,Ux,n4,n5"
-#parameterNames_corrections = "U0,  U1, U2"
-#initialParameterValues = (2.0, 0.4, 1.0, 1.8 ,2.0, 1.0)
-initialParameterValues = (1.2, 0.38, 0.85, 3.0, 2.0)
-#initialParameterValues_corrections = (0.0,0.0,1000.0,0.0)
-initialParameterValues_corrections = (1.0, 0.5, 1.0, 1.0)
-#initialParameterValues_corrections =(1.0, 0.6,0.7,1.5, 0.5,0.7, 1.5)
-#initialParameterValues_corrections = (2.0, 0.5, 0.0)
+parameterNames = "tau,sigma_k,zeta,Ixs,ns"
+parameterNames_corrections = "Ah1,Ah2"
+initialParameterValues = (1.2,0.4,0.6,1.0,1.4)
+initialParameterValues_corrections = (0.,0.,)
 
 # Correct if spaces are included in the parameters names
 parameterNames = parameterNames.replace(" ","")
@@ -60,30 +44,32 @@ if WS.corrections_to_scaling:
     Ytheory = Ytheory + "*" + Ytheory_corrections
     parameterNames = parameterNames + "," + parameterNames_corrections
     initialParameterValues = initialParameterValues + initialParameterValues_corrections
- 
 
+
+
+# If single independent parameter, must have comma after it -- makes it a tuple
 theory = SloppyScaling.ScalingTheory(Ytheory, parameterNames, \
                 initialParameterValues, WS.independentNames, \
-                scalingX = Xscaled, scalingY = Yscaled, scalingW = Wscaled,\
+                scalingX = Xscaled, scalingY = Yscaled, \
                 scalingXTeX = XscaledTeX, \
                 scalingYTeX = YscaledTeX, \
                 title = title, \
                 scalingTitle = scalingTitle, \
                 Xname=Xname, XscaledName=XscaledName, \
-                Yname=Yname, WscaledName = WscaledName, \
+                Yname=Yname, \
                 normalization = WS.normalization)
 
 data = SloppyScaling.Data()
 
 loaded = 0
 for independent in WS.independentValues:
-    L, k, W = independent
+    L, k = independent
     ext =  "_" + WS.simulType + ".bnd"
     if os.getlogin() == 'yj':
         k_string = "_k"
     else:
         k_string = "_k="
-    fileName = "".join([WS.dataDirectory,name,"_W=",str(W).rjust(4, str(0)),\
+    fileName = "".join([WS.dataDirectory,name,\
                         k_string,str(k), "_System_Size=",str(2*L), "x", str(L), ext])
     success = data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[independent], \

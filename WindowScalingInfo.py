@@ -136,13 +136,13 @@ Complete_list = [\
             ]
 
 sortedValues = False
-independentNames, independentValues = Utils.get_independent(Values, sorting = sortedValues)
+independentNames, independentValues = Utils.get_independent(A11_W, sorting = sortedValues)
 
 # Data to fit and models
-moduleNames = ['Ahk','Awk']
+#moduleNames = ['Ahk','Awk']
 #moduleNames = ['Ahk']
 #moduleNames = ['A10', 'A11']
-#moduleNames = ['A00']
+moduleNames = ['A11']
 
 
 # Directory where data to be fit is stored
