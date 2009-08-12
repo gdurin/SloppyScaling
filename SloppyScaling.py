@@ -470,8 +470,8 @@ class Model:
                         " not supported yet in PlotFits"
                 
         pylab.axis(tuple(ax0))
-        pylab.legend(loc=pylabLegendLoc, ncol=2)
-        #pylab.legend(loc=pylabLegendLoc)
+        #pylab.legend(loc=pylabLegendLoc, col=2)
+        pylab.legend(loc=pylabLegendLoc)
         if plotCollapse:
             pylab.xlabel(self.theory.scalingXTeX, fontsize=fontSizeLabels)
             pylab.ylabel(self.theory.scalingYTeX, fontsize=fontSizeLabels)
@@ -730,10 +730,13 @@ class CompositeModel:
         
     def PlotBestFit(self, initialParameterValues=None, \
                     figNumStart = 1, heldParams = None):
+        # Unicode characters
+        uniSymbol = {'tau': unichr(964), 'sigma_k': unichr(963)+"_k",\
+                         'zeta': unichr(950)}
         
         if heldParams:
             if not isinstance(heldParams, list):
-                heldParams = [helddParams]
+                heldParams = [heldParams]
             # Check now if the name is correct
             l_index = []
             for index, par in enumerate(heldParams):
@@ -765,13 +768,19 @@ class CompositeModel:
         if heldParams:
             print "=== Held parameters ================"
             for pName,pValue in heldParams:
-                print "%s = %2.2f" % (pName, pValue)
+                if pName in uniSymbol:
+                    print "%3s = %2.2f" % (uniSymbol[pName], pValue)
+                else:
+                    print "%3s = %2.2f" % (pName, pValue)
         # Print parameter values
         # YJC: changed printing here to print one sigma error instead of 95% confidence level
         print "=== Fitting parameters (with one sigma error)=============="
         for name, val, error in \
                 zip(self.theory.parameterNameList,optimizedParameterValues, errors):
-            print "%7s = %2.3f +/- %2.3f" %(name, val, error)
+            if name in uniSymbol:
+                print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
+            else:
+                print "%3s = %2.3f +/- %2.3f" %(name, val, error)
         print "====================================="
         #
         # Print plots
