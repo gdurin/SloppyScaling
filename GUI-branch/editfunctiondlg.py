@@ -354,8 +354,8 @@ class EditFunctionDlg(QDialog,ui_editfunctiondlg.Ui_editFunctionDialog):
             try:
                 self.fvars['WscaledLatex'] = self.varWLatexText
             except:
-                Xerror = QString("Error: please guess or enter a valid LaTeX string for variable ",self.fvars['XscaledName'])
-                QMessageBox.critical(self,"Error in LaTeX", Xerror)
+                Werror = QString("Error: please guess or enter a valid LaTeX string for variable ",self.fvars['WscaledName'])
+                QMessageBox.critical(self,"Error in LaTeX", Werror)
                 self.varWLatexGuessButton.setFocus(True)
                 return
         else:
