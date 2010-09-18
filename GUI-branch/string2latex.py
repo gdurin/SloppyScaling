@@ -3,7 +3,7 @@
 # This script translates a string into a LaTeX string
 # and makes an image.png
 # Author: Gianfranco Durin
-# Date: 2010-09-03
+# Date: 2010-09-16
 ########################################
 
 import os
@@ -13,7 +13,7 @@ import matplotlib.mathtext as mathtext
 import re
 import copy
 
-def findElement(element,string):
+def findElement(element, string):
     return [match.start() for match in re.finditer(re.escape(element), string)]
 
 def findParentheses(string):
@@ -23,8 +23,8 @@ def findParentheses(string):
     and the value parenthesis[left] is the position of the right parenthesis ")"
     """
     parentheses = {}
-    parLeft = findElement("(",string)
-    parRight = findElement(")",string)
+    parLeft = findElement("(", string)
+    parRight = findElement(")", string)
     parLeft.reverse() # This does the trick to quickly find the match
     for left in parLeft:
         right = min([i for i in parRight if i>left])
@@ -38,16 +38,22 @@ def parentheses2curly(positions, string):
     """
     t = list(string)
     p1, p2 = positions
-    t[p1], t[p2] = "{","}"
+    t[p1], t[p2] = "{", "}"
     return "".join([ i for i in t])
 
-def addSlash(s):
-    return "\\"+str(s)
+def addSlash(string):
+    return "\\"+str(string)
 
 def string2Latex(string):
     """
     Transform a string into a LaTeX expression
     """
+    # 0. Check if "**1.0*" exists and erase it:
+    # a usual result from sympy differentials
+    exprex = ["**1.0*","**1.*"]
+    for expr in exprex:
+        if expr in string:
+            string = string.replace(expr,"*")        
     # 1. Numbers with dots (es. 1.0 -> 1)
     match = re.findall("\d+\.\d+[^0-9]|\d+\.[^0-9]",string)
     if match:
@@ -58,7 +64,6 @@ def string2Latex(string):
                 string = string.replace(syb,"")
             elif n == int(n):
                 string = string.replace(syb,str(int(n))+after)
-    
     # 2. Selected commands which require to change 
     # parentheses to curly brakets
     commands = {"**":"^", "sqrt":"\sqrt"}
@@ -85,15 +90,16 @@ def string2Latex(string):
     match = re.findall('\s\*\s',string)
     for m in match:
         string = string.replace(m,"\/")    
-    string = string.replace("*","")
+    string = string.replace("*"," ")
     if match:
         string = string.replace("*","\/")    
     # 3. Greek letters
     # REMEMBER: shortest letter before the others, such as eta, beta, zeta
     greeks = ['alpha','chi','delta','iota','lambda','mu','nu','omega',\
               'psi','tau','upsilon','xi']
-    greeksTuples = [('eta','beta','zeta'),('gamma','digamma'),('epsilon', 'varepsilon'),\
-                    ('kappa','varkappa'),('phi','varphi'),('pi','varpi'),('rho','varrho'),\
+    greeksTuples = [('eta','beta','zeta'),('gamma','digamma'),\
+                    ('epsilon', 'varepsilon'),('kappa','varkappa'),\
+                    ('phi','varphi'),('pi','varpi'),('rho','varrho'),\
                     ('sigma','varsigma'),('theta','vartheta')] 
     # Not ambigous letters
     for i in range(2):
@@ -167,9 +173,14 @@ def string2Image(string,n='0000',thisDir="./"):
 def showLatexImage(latexString,n='0000',thisDir="./"):
     fileName =  latex2Image(latexString,n,thisDir)
     if ".png" in fileName:
-        os.system('okular '+fileName)
+        os.system('okular '+fileName+" \&")
     else:
         print fileName
+    return
+
+def showLatexFromString(string,n='0000',thisDir="./"):
+    latex = string2Latex(string)
+    showLatexImage(latex,n,thisDir)
     return
 
 if __name__ == '__main__':
@@ -184,6 +195,7 @@ if __name__ == '__main__':
         s = "P(S|W) = alpha**2 + eta * (S/W)**1.5 * exp(-(S/S_0)**2.5)"
         #s = "S_s**((2.-tau)*(1.+zeta)/zeta)/s*exp(-1.0*S_s**n_h*Ix_h)"
         s = "calA__11 * S_s**((2.-tau)*(1.+zeta)/zeta)/s * exp(-1.0*S_s**n*Ix_h)"
+        #s = "S**1.0*(1/S)"
     myDir = "images"
     sLatex = string2Latex(s)
     print sLatex

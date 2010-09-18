@@ -5,6 +5,7 @@ from PyQt4.QtGui import *
 import matplotlib
 import matplotlib.mathtext as mathtext
 import string2latex as str2lx
+from sympyUtils import getDiff
 import pickle
 import re
 import ui_editfunctiondlg
@@ -384,15 +385,51 @@ class EditFunctionDlg(QDialog,ui_editfunctiondlg.Ui_editFunctionDialog):
 
         self.fvars['Ycorrections'] = str(self.correctionFunctionText.text())
         self.fvars["Ysign"] = str(self.correctionComboBox.currentText())
-        self.fvars["parameterNames_corrections"] = self.correctionParamsText.text()
-        # Other variables
-        # self.fvars['independent']  set above
+        self.fvars["parameterNames_corrections"] = str(self.correctionParamsText.text())
+        #
+        # Calcultate analytically the first derivative
+        # 1. No corrections
+        derivativeNoCorrections = {}
+        params = self.fvars['parameterNames'].split(",")
+        independent = self.fvars['independent'].split(",")
+        allVariables = params + independent + [self.fvars['Xname']]
+        Yvalue = self.fvars['Yvalue']
+        XscaledName = self.fvars['XscaledName']
+        if XscaledName:
+            XscaledValue = self.fvars['XscaledValue']
+            Yvalue = Yvalue.replace(XscaledName, "("+XscaledValue+")")
+        WscaledName = self.fvars['WscaledName']
+        if WscaledName:
+            WscaledValue = self.fvars['WscaledValue']
+            Yvalue = Yvalue.replace(WscaledName, "("+WscaledValue+")")
+        diffs = getDiff(allVariables, Yvalue, params)
+        for i,deriv in enumerate(diffs):
+            derivativeNoCorrections[params[i]] = deriv
+        self.fvars['derivativeNoCorrections'] = derivativeNoCorrections
+        # 2. With corrections
+        derivativeWithCorrections = {}
+        paramsCorrection = self.fvars["parameterNames_corrections"].split(",")
+        params = params + paramsCorrection
+        allVariables = allVariables + paramsCorrection
+        allVariables = list(set(allVariables)) # Just to be sure
+        Yvalue = " ".join([Yvalue,self.fvars['Ysign'],self.fvars['Ycorrections']])
+        if XscaledName:
+            XscaledValue = self.fvars['XscaledValue']
+            Yvalue = Yvalue.replace(XscaledName, "("+XscaledValue+")")
+        if WscaledName:
+            WscaledValue = self.fvars['WscaledValue']
+            Yvalue = Yvalue.replace(WscaledName, "("+WscaledValue+")")
+        print Yvalue
+        diffs = getDiff(allVariables, Yvalue, params)
+        for i,deriv in enumerate(diffs):
+            derivativeWithCorrections[params[i]] = deriv
+        self.fvars['derivativeWithCorrections'] = derivativeWithCorrections
         # Save on disk
         F = open(self.pklName,'wb')
         pickle.dump(self.fvars,F)
         F.close()
-        #for key in self.fvars:
-            #print key, self.fvars[key]
+        for key in self.fvars:
+            print key, self.fvars[key]
         QDialog.accept(self)   
     
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ class ScalingTheory:
     appropriately.
     #
     Example of implementation:
-    sizeHisto = ScalingTheory(TODO)
+    sizeHisto = ScalingTheory(still TODO)
     """
     def __init__(self, fvars, independentNames, \
                  heldParameterBool = False, heldParameterList = "", heldParameterPass = False,\
