@@ -32,7 +32,7 @@ def getDiff(variables,function,varsDiff):
     return diffs
 
 if __name__ == '__main__':
-    s = "(S*(1.0*k/L)**(sigma_k*zeta)/W)**((2.-tau)*(1.+zeta)/zeta)/S \
+    s = "(S*(k/L)**(sigma_k*zeta)/W)**((2.-tau)*(1.+zeta)/zeta)/S \
       * exp(-1.0*(S*(1.0*k/L)**(sigma_k*zeta)/W)**n*I__xh)"
 
     allVariables = "S,tau,zeta,sigma_k,n,I__xh,W,k,L".split(",")

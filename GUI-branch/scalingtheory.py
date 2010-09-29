@@ -1,5 +1,7 @@
+from __future__ import division
 import numexpr as ne
-from numpy import exp
+from numpy import exp, empty
+import scipy
 
 class ScalingTheory:
     """
@@ -23,8 +25,8 @@ class ScalingTheory:
                  normalization = None):
         for key in fvars:
             setattr(self,key,fvars[key])
-            print key
-        print self.initialParameterValues
+            #print key,": ", fvars[key]
+            #print 
         self.parameterNameList = self.parameterNames.split(",")
         self.parameterNames0 = self.parameterNames 
         self.parameterNameList0 = self.parameterNameList
@@ -43,6 +45,7 @@ class ScalingTheory:
         # Set up vector of independent variable from X
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
+        independentValues = tuple(map(float,independentValues))
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
         if self.heldParameterBool:
@@ -68,6 +71,7 @@ class ScalingTheory:
         # Set values of parameters, independent variables, and X vector
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
+        independentValues = tuple(map(float,independentValues))
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
         if self.heldParameterBool:
@@ -87,6 +91,7 @@ class ScalingTheory:
         # Set values of parameters, independent variables, and X vector
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
+        independentValues = tuple(map(float,independentValues))
         exec(self.parameterNames + " = parameterValues")
         exec(self.independentNames + " = independentValues")
         if self.heldParameterBool:
@@ -94,7 +99,7 @@ class ScalingTheory:
                 exec(par + " = " + str(val))
         exec(self.Xname + " = X")
         #YJC: added scalingW here too
-        if self.WscaledValue is not None:
+        if self.WscaledValue:
             exec(self.WscaledName + '=' +self.WscaledValue)
         if self.XscaledName:
             exec(self.XscaledName + "="+self.XscaledValue)
@@ -105,16 +110,49 @@ class ScalingTheory:
     def reduceParameters(self,pNames,pValues,heldParams):
         list_params = pNames.split(",")
         list_initials = list(pValues)
-        for param_to_remove, val in heldParams:
+        for paramToRemove, val in heldParams:
             try:
-                index = list_params.index(param_to_remove)
+                index = list_params.index(paramToRemove)
                 list_params.pop(index)
                 list_initials.pop(index)
             except ValueError:
                 print "Warning: parameter ", param_to_remove, " NOT included in the list"
         return ",".join(list_params), tuple(list_initials)
 
-    def HoldFixedParams(self, heldParameters):
+    def jacobian(self,X,parameterValues,independentValues):
+        """
+        Calculate the jacobian using analytical derivatives
+        """
+        #print "================="
+        #print independentValues
+        #print "================="
+        independentValues = tuple(map(float,independentValues))
+        exec "%s = parameterValues" % self.parameterNames
+        exec  "%s = independentValues" % self.independentNames
+        exec "%s = X" % self.Xname
+        #for i in self.parameterNames.split(","):
+            #print ne.evaluate(i),
+        #print 
+        if self.heldParameterBool:
+            for par, val in self.heldParameterList:
+                exec(par + " = " + str(val))
+        #for i,param in enumerate(self.parameterNameList):
+            #if i == 0:
+                #jb = ne.evaluate(self.deriv[param])
+                #jb = jb[scipy.newaxis,:]
+            #else:
+                #jbdep = ne.evaluate(self.deriv[param])
+                #jbdep = jbdep[scipy.newaxis,:]
+                #jb = scipy.concatenate((jb,jbdep))
+            #print param, self.deriv[param]
+        D = []
+        for param in self.parameterNameList:
+            D.append(self.deriv[param])
+        jb = scipy.array(map(ne.evaluate,D))
+        return jb
+        
+        
+    def holdFixedParams(self, heldParameters):
         """
         Sets parameters to fixed values.
         heldParameters is a list of tuple(s) of the type:

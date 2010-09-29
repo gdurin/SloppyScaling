@@ -1,3 +1,4 @@
+from __future__ import division
 import scipy
 import pylab
 import copy
@@ -81,23 +82,44 @@ class Model:
     """
     A Model object unites Theory with Data. It's primary task is to 
     calculate the residuals (the difference between theory and data)
-    and the cost.
+    the cost, and the jacobian.
     """
     def __init__(self, theory, data, name, sorting):
         self.theory = theory
         self.data = data
         self.name = name
         self.sorting = sorting
+
+    def jacobian(self, parameterValues):
+        for i, independentValues in enumerate(self.data.experiments):
+            initialSkip = self.data.initialSkip[independentValues]
+            X = self.data.X[independentValues][initialSkip:]
+            errorBar = self.data.errorBar[independentValues][initialSkip:]
+            thJacobian = self.theory.jacobian(X, parameterValues, independentValues)/errorBar
+            if i == 0:
+                J = thJacobian
+            else:
+                J = scipy.concatenate((J,thJacobian),1)
+        return J
         
-    def Residual(self, parameterValues, dictResidual=False):
+    def dictResidual(self, parameterValues):
+        residuals = {}
+        for independentValues in self.data.experiments:
+            initialSkip = self.data.initialSkip[independentValues]
+            X = self.data.X[independentValues][initialSkip:]
+            Y = self.data.Y[independentValues][initialSkip:]
+            errorBar = self.data.errorBar[independentValues][initialSkip:]
+            Ytheory = self.theory.Y(X, parameterValues, independentValues)
+            res = (Ytheory-Y)/errorBar
+            residuals[independentValues] = res
+        return residuals
+        
+    def Residual(self, parameterValues):
         """
         Calculate the weighted residuals,
         with the weights = 1 / errorbar
         """
-        if dictResidual:
-            residuals = {}
-        else:
-            residuals = scipy.array([])
+        residuals = scipy.array([])
             
         for independentValues in self.data.experiments:
             initialSkip = self.data.initialSkip[independentValues]
@@ -105,13 +127,8 @@ class Model:
             Y = self.data.Y[independentValues][initialSkip:]
             errorBar = self.data.errorBar[independentValues][initialSkip:]
             Ytheory = self.theory.Y(X, parameterValues, independentValues)
-            # XXX Likely a better way to merge scipy arrays into big one
-            # Yes: there is
             res = (Ytheory-Y)/errorBar
-            if dictResidual:
-                residuals[independentValues] = res
-            else:
-                residuals = scipy.concatenate((residuals,res))
+            residuals = scipy.concatenate((residuals,res))
         return residuals
         
     def Cost(self, parameterValues=None):
@@ -290,7 +307,7 @@ class Model:
             parameterValues = self.theory.initialParameterValues
         pylab.ioff()
         pylab.clf()
-        residuals = self.Residual(parameterValues, dictResidual=True)
+        residuals = self.dictResidual(parameterValues)
         x0 = 0
         for independentValues in sorted(residuals):
             res = residuals[independentValues]
@@ -306,10 +323,16 @@ class Model:
         pylab.ion()
         pylab.show()
         
-    def BestFit(self,initialParameterValues = None):
+    def BestFit(self,initialParameterValues = None,isJacobian=True):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
-        out = scipy.optimize.minpack.leastsq(self.Residual, \
+        if isJacobian:
+            jacobian = self.jacobian
+            out = scipy.optimize.minpack.leastsq(self.Residual, \
+                initialParameterValues,Dfun=jacobian, \
+                col_deriv=True, warning=True, full_output=1, ftol=1.e-16) 
+        else:
+            out = scipy.optimize.minpack.leastsq(self.Residual, \
                 initialParameterValues, full_output=1, ftol=1.e-16) 
         return out
     
@@ -335,7 +358,7 @@ class Model:
         # Call setHeldParams even if heldParams=None to 
         # check if original Names and values have to be used
 
-        self.theory.HoldFixedParams(heldParams)
+        self.theory.holdFixedParams(heldParams)
    
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
@@ -357,7 +380,6 @@ class Model:
                 zip(self.theory.parameterNameList,optimizedParameterValues, errors):
             print name + "= %2.4f +/- %2.4f" %(val, error)
         print "======================================================"
-
         pylab.figure(figFit)
         self.PlotFunctions(optimizedParameterValues)
         pylab.figure(figCollapse)
@@ -438,7 +460,7 @@ class CompositeModel:
                 print "Warning: parameter ", param_to_remove, " NOT included in the list"
         return ",".join(list_params), tuple(list_initials)
         
-    def HoldFixedParams(self, heldParameters):
+    def holdFixedParams(self, heldParameters):
         """
         Sets parameters in fixedParamNames to their initial values,
         and updates the parameter values, names of the composite model
@@ -454,7 +476,7 @@ class CompositeModel:
             th.initialParameterValues = pValues
             for currentModel in self.Models.values():
                 currentModel.theory.heldParameterBool = True
-                currentModel.theory.HoldFixedParams(heldParameters)
+                currentModel.theory.holdFixedParams(heldParameters)
             self.heldParamsPass = True
         else:
             if self.heldParamsPass:
@@ -467,7 +489,7 @@ class CompositeModel:
                     currentModel.theory.initialParameterValues=th.initialParameterValues0
                     currentModel.theory.heldParameterBool = False
                     currentModel.theory.heldParameterList = None
-            
+
     def Residual(self, parameterValues):
         residuals = scipy.array([])
         for model in self.Models.values():
@@ -521,12 +543,25 @@ class CompositeModel:
                                 pylabLegendLoc, plotCollapse = True)
             pylab.figure(figNum)
             
-    def BestFit(self,initialParameterValues=None):
+    def jacobian(self, parameterValues):
+        for i,model in enumerate(self.Models.values()):
+            if i == 0:
+                J = model.jacobian(parameterValues)
+            else:
+                J = numpy.concatenate((J,model.jacobian(parameterValues)),1)
+        return J
+            
+    def BestFit(self,initialParameterValues=None,isJacobian=True):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
+        #if isJacobian:
+        outWith = scipy.optimize.minpack.leastsq(self.Residual, \
+                initialParameterValues, Dfun=self.jacobian, \
+                col_deriv=True, warning=True, full_output=1, ftol=1.e-16)
+        #else:
         out = scipy.optimize.minpack.leastsq(self.Residual, \
                 initialParameterValues, full_output=1, ftol = 1e-16) 
-        return out
+        return outWith,out
         
     def PlotBestFit(self, initialParameterValues=None, \
                     figNumStart = 1, heldParams = None):
@@ -550,56 +585,61 @@ class CompositeModel:
                 for i in l_index:
                     heldParams.pop(i)
                     
-        # Call HoldFixedParams even if heldParams = None to check
+        # Call holdFixedParams even if heldParams = None to check
         # if original Names and values have to be used
-        self.HoldFixedParams(heldParams)
+        self.holdFixedParams(heldParams)
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
 
         print 'initial cost = ', self.Cost(initialParameterValues)
-        out = self.BestFit(initialParameterValues)
-        optimizedParameterValues = out[0]
-        covar = out[1]
-        errors = [covar[i,i]**0.5 for i in range(len(covar))]
-        #inv_t_student = scipy.special.stdtrit(len(errors),0.90)
-        #errors = inv_t_student*errors
-        print 'optimized cost = ', self.Cost(optimizedParameterValues)
-        print 'optimized SST = ', self.SST(optimizedParameterValues)
-        print 'R-value = ', self.R_square(optimizedParameterValues)
-        print
-        if heldParams:
-            print "=== Held parameters ================"
-            for pName,pValue in heldParams:
-                if pName in uniSymbol:
-                    print "%3s = %2.2f" % (uniSymbol[pName], pValue)
-                else:
-                    print "%3s = %2.2f" % (pName, pValue)
-        # Print parameter values
-        # YJC: changed printing here to print one sigma error instead of 95% confidence level
-        print "=== Fitting parameters (with one sigma error)=============="
-        for name, val, error in \
+        outs = self.BestFit(initialParameterValues)
+        for out in outs:
+            print out[0]
+            optimizedParameterValues = out[0]
+            covar = out[1]
+            errors = [covar[i,i]**0.5 for i in range(len(covar))]
+            #errors = [1 for i in range(len(optimizedParameterValues))]        
+            #inv_t_student = scipy.special.stdtrit(len(errors),0.90)
+            #errors = inv_t_student*errors
+            print 'optimized cost = ', self.Cost(optimizedParameterValues)
+            #print 'optimized SST = ', self.SST(optimizedParameterValues)
+            #print 'R-value = ', self.R_square(optimizedParameterValues)
+            #print
+            if heldParams:
+                print "=== Held parameters ================"
+                for pName,pValue in heldParams:
+                    if pName in uniSymbol:
+                        print "%3s = %2.2f" % (uniSymbol[pName], pValue)
+                    else:
+                        print "%3s = %2.2f" % (pName, pValue)
+            # Print parameter values
+            # YJC: changed printing here to print one sigma error instead of 95% confidence level
+            print "=== Fitting parameters (with one sigma error)=============="
+            for name, val, error in \
                 zip(self.theory.parameterNameList,optimizedParameterValues, errors):
-            if name in uniSymbol:
-                print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
-            else:
-                print "%3s = %2.3f +/- %2.3f" %(name, val, error)
-        print "====================================="
-        #
-        # Print plots
-        #
-        figNum = figNumStart-1
-        for model in self.Models.values():
-            for FT in [False,True]:
+                if name in uniSymbol:
+                    print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
+                else:
+                    print "%3s = %2.3f +/- %2.3f" %(name, val, error)
+            print "====================================="
+            print "n. of function calls = ", out[2]['nfev']
+            print out[3:]
+            #
+            # Print plots
+            #
+            figNum = figNumStart-1
+            for model in self.Models.values():
+                for FT in [False,True]:
+                    figNum+=1
+                    pylab.figure(figNum)
+                    model.PlotFunctions(optimizedParameterValues, plotCollapse = FT)
+                    # Weird bug: repeating figure needed to get to show
+                    pylab.figure(figNum)
                 figNum+=1
                 pylab.figure(figNum)
-                model.PlotFunctions(optimizedParameterValues, plotCollapse = FT)
-                # Weird bug: repeating figure needed to get to show
+                model.PlotResiduals(optimizedParameterValues)
                 pylab.figure(figNum)
-            figNum+=1
-            pylab.figure(figNum)
-            model.PlotResiduals(optimizedParameterValues)
-            pylab.figure(figNum)
-        #return optimizedParameterValues
-        ts = round(time() - t0, 3)
-        print "*** Time elapsed:", ts
-        return out
+            #return optimizedParameterValues
+            ts = round(time() - t0, 3)
+            print "*** Time elapsed:", ts
+        return outs

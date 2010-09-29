@@ -13,6 +13,8 @@ jointModuleName = "".join(WS.moduleNames)
 
 print jointModuleName
 compositeModule = SloppyScaling.CompositeModel(jointModuleName)
+
+
 for moduleName in WS.moduleNames:
     exec("obj_mod = "+moduleName)
     m = getattr(obj_mod,moduleName)

@@ -10,10 +10,13 @@ import SloppyScaling
 reload(SloppyScaling)
 import string2latex
 
+
+dirImages, dirFiles = 'images','files'
 f = __file__
 f = f.split("/")[-1]
 thisModule = f.split('Module.py')[0]
 filePkl = ".".join([thisModule,"pkl"])
+filePkl = os.path.join(dirFiles,filePkl)
 F = open(filePkl, 'rb')
 fvars = pickle.load(F)
 
@@ -28,17 +31,20 @@ fvars = pickle.load(F)
 name = fvars['Yname'] # This is the name used in the files
 name = name.replace("__","")
 
-fvars['initialParameterValues'] = (1.2, 0.38, 0.85, 3.0, 2.0)
-fvars['initialParameterValues_corrections'] = (1.0, 0.5, 1.0, 1.0)
+fvars['initialParameterValues'] = (1.4, 0.38, 0.85, 2.0, 2.0)
 
+fvars['deriv'] = fvars['derivNoCorrections']
 
 if WS.corrections_to_scaling:
-    fvars['Ytheory'] = fvars['Ytheory'] + "*" + fvars['Ytheory_corrections']
+    fvars['Yvalue'] = fvars['Yvalue'] + fvars['Ysign'] + fvars['Ycorrections']
+    fvars['initialParameterValues_corrections'] = (1.0, 0.5, 1.0, 1.0)
     fvars['parameterNames'] = fvars['parameterNames'] + "," + fvars['parameterNames_corrections']
     fvars['initialParameterValues'] = fvars['initialParameterValues'] + fvars['initialParameterValues_corrections']
- 
+    fvars['deriv'] = fvars['derivWithCorrections']
     
-theory = scalingtheory.ScalingTheory(fvars, WS.independentNames, \
+#print fvars['independent']
+
+theory = scalingtheory.ScalingTheory(fvars, fvars['independent'],\
                                      normalization = WS.normalization)
 
 data = SloppyScaling.Data()

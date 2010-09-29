@@ -405,7 +405,7 @@ class EditFunctionDlg(QDialog,ui_editfunctiondlg.Ui_editFunctionDialog):
         diffs = getDiff(allVariables, Yvalue, params)
         for i,deriv in enumerate(diffs):
             derivativeNoCorrections[params[i]] = deriv
-        self.fvars['derivativeNoCorrections'] = derivativeNoCorrections
+        self.fvars['derivNoCorrections'] = derivativeNoCorrections
         # 2. With corrections
         derivativeWithCorrections = {}
         paramsCorrection = self.fvars["parameterNames_corrections"].split(",")
@@ -419,17 +419,18 @@ class EditFunctionDlg(QDialog,ui_editfunctiondlg.Ui_editFunctionDialog):
         if WscaledName:
             WscaledValue = self.fvars['WscaledValue']
             Yvalue = Yvalue.replace(WscaledName, "("+WscaledValue+")")
-        print Yvalue
         diffs = getDiff(allVariables, Yvalue, params)
         for i,deriv in enumerate(diffs):
             derivativeWithCorrections[params[i]] = deriv
-        self.fvars['derivativeWithCorrections'] = derivativeWithCorrections
+        self.fvars['derivWithCorrections'] = derivativeWithCorrections
         # Save on disk
         F = open(self.pklName,'wb')
         pickle.dump(self.fvars,F)
         F.close()
+        # Print for test only
         for key in self.fvars:
-            print key, self.fvars[key]
+            print key, ": ", self.fvars[key]
+            print 
         QDialog.accept(self)   
     
 if __name__ == "__main__":

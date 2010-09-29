@@ -14,11 +14,11 @@ simulType = "NonLinear"
 # Attention:
 # Data are load entirely, but the fitting is done
 # skipping the first 'rows_to_skip' lines
-rows_to_skip = 4
+rows_to_skip = 0
 
 # Type of normalization for the function (None, NormBasic, NormIntegerSum, NormLog)
 # None does not need to be a string, NormBasic and NormIntegerSum do...
-normalization = "NormBasic"
+normalization = "NormLog"
 
 # Decide to add corrections to scaling in the function module (True/False)
 corrections_to_scaling = False
