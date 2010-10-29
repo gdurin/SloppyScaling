@@ -20,9 +20,7 @@ class ScalingTheory:
     Example of implementation:
     sizeHisto = ScalingTheory(still TODO)
     """
-    def __init__(self, fvars, independentNames, \
-                 heldParameterBool = False, heldParameterList = "", heldParameterPass = False,\
-                 normalization = None):
+    def __init__(self, fvars, normalization=None):
         for key in fvars:
             setattr(self,key,fvars[key])
             #print key,": ", fvars[key]
@@ -31,10 +29,10 @@ class ScalingTheory:
         self.parameterNames0 = self.parameterNames 
         self.parameterNameList0 = self.parameterNameList
         self.initialParameterValues0 = self.initialParameterValues
-        self.independentNames = independentNames
         self.normalization = normalization
-        self.heldParameterBool = heldParameterBool
-        self.heldParameterPass = heldParameterPass
+        self.isHeldParameter = False
+        self.heldParameterPass = False
+        self.numIndepParameters = len(fvars['independentNames'].split(","))
 
     def Y(self, X, parameterValues, independentValues):
         """
@@ -45,18 +43,21 @@ class ScalingTheory:
         # Set up vector of independent variable from X
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
-        independentValues = tuple(map(float,independentValues))
-        exec(self.parameterNames + " = parameterValues")
-        exec(self.independentNames + " = independentValues")
-        if self.heldParameterBool:
+        #independentValues = tuple(map(float,independentValues))
+        exec  "%s = parameterValues" % self.parameterNames
+        if self.numIndepParameters == 1:
+            exec  "%s, = independentValues" % self.independentNames
+        else:
+            exec  "%s = independentValues" % self.independentNames
+            
+        if self.isHeldParameter:
             for par, val in self.heldParameterList:
-                exec(par + " = " + str(val))
-        exec(self.Xname + ' = X')
+                exec "%s = %s" % (par,str(val))
+        exec  "%s = X" % self.Xname
         if self.XscaledName:
-            exec(self.XscaledName +'='+ self.XscaledValue)
-        #YJC: added scalingW here
+            exec "%s = %s" % (self.XscaledName, self.XscaledValue)
         if self.WscaledValue:
-            exec(self.WscaledName +"="+ self.WscaledValue)
+            exec "%s = %s" % (self.WscaledName, self.WscaledValue)
         #exec("Y = " + self.Yvalue)
         Y = ne.evaluate(self.Yvalue)
         if self.normalization:
@@ -71,17 +72,18 @@ class ScalingTheory:
         # Set values of parameters, independent variables, and X vector
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
-        independentValues = tuple(map(float,independentValues))
-        exec(self.parameterNames + " = parameterValues")
-        exec(self.independentNames + " = independentValues")
-        if self.heldParameterBool:
+        #independentValues = tuple(map(float,independentValues))
+        exec  "%s = parameterValues" % self.parameterNames
+        if self.numIndepParameters == 1:
+            exec  "%s, = independentValues" % self.independentNames
+        else:
+            exec  "%s = independentValues" % self.independentNames
+        if self.isHeldParameter:
             for par, val in self.heldParameterList:
-                exec(par + " = " + str(val))
-        exec(self.Xname + " = X")
-        #YJC: added scalingW here too
-        if self.WscaledValue is not None:
-            exec(self.WscaledName + '=' +self.WscaledValue)
-        #exec("XScale = " + self.XscaledValue)
+                exec "%s = %s" % (par,str(val))
+        exec  '%s = X' % self.Xname
+        if self.WscaledValue:
+            exec "%s = %s" % (self.WscaledName, self.WscaledValue)
         return ne.evaluate(self.XscaledValue)
 
     def ScaleY(self, X, Y, parameterValues, independentValues):
@@ -91,20 +93,21 @@ class ScalingTheory:
         # Set values of parameters, independent variables, and X vector
         # Warning: local variables in subroutine must be named
         # 'parameterValues', 'independentValues', and 'X'
-        independentValues = tuple(map(float,independentValues))
-        exec(self.parameterNames + " = parameterValues")
-        exec(self.independentNames + " = independentValues")
-        if self.heldParameterBool:
+        #independentValues = tuple(map(float,independentValues))
+        exec  "%s = parameterValues" % self.parameterNames
+        if self.numIndepParameters == 1:
+            exec  "%s, = independentValues" % self.independentNames
+        else:
+            exec  "%s = independentValues" % self.independentNames
+        if self.isHeldParameter:
             for par, val in self.heldParameterList:
-                exec(par + " = " + str(val))
-        exec(self.Xname + " = X")
-        #YJC: added scalingW here too
-        if self.WscaledValue:
-            exec(self.WscaledName + '=' +self.WscaledValue)
+                exec "%s = %s" % (par,str(val))
+        exec  '%s = X' % self.Xname
         if self.XscaledName:
-            exec(self.XscaledName + "="+self.XscaledValue)
-        exec(self.Yname + " = Y")
-        #exec("YScale = " + self.YscaledValue)
+            exec "%s = %s" % (self.XscaledName, self.XscaledValue)
+        if self.WscaledValue:
+            exec "%s = %s" % (self.WscaledName, self.WscaledValue)
+        exec  "%s = Y" % self.Yname
         return ne.evaluate(self.YscaledValue)
 
     def reduceParameters(self,pNames,pValues,heldParams):
@@ -126,14 +129,17 @@ class ScalingTheory:
         #print "================="
         #print independentValues
         #print "================="
-        independentValues = tuple(map(float,independentValues))
+        #independentValues = tuple(map(float,independentValues))
         exec "%s = parameterValues" % self.parameterNames
-        exec  "%s = independentValues" % self.independentNames
+        if self.numIndepParameters == 1:
+            exec  "%s, = independentValues" % self.independentNames
+        else:
+            exec  "%s = independentValues" % self.independentNames
         exec "%s = X" % self.Xname
         #for i in self.parameterNames.split(","):
             #print ne.evaluate(i),
         #print 
-        if self.heldParameterBool:
+        if self.isHeldParameter:
             for par, val in self.heldParameterList:
                 exec(par + " = " + str(val))
         #for i,param in enumerate(self.parameterNameList):
@@ -160,7 +166,7 @@ class ScalingTheory:
         """
         
         if heldParameters:
-            self.heldParameterBool = True
+            self.isHeldParameter = True
             pNames, pValues = \
                     self.reduceParameters(self.parameterNames0, \
                                            self.initialParameterValues0, \
@@ -169,7 +175,7 @@ class ScalingTheory:
             self.parameterNameList = pNames.split(",")
             self.initialParameterValues = pValues
             self.heldParameterList = heldParameters
-            self.heldParameterBool = True
+            self.isHeldParameter = True
             self.heldParameterPass = True
         else:
             # Check if some parameters have been held before, and reset
@@ -177,13 +183,13 @@ class ScalingTheory:
                 self.parameterNames=self.parameterNames0
                 self.parameterNameList = self.parameterNameList0
                 self.initialParameterValues = self.initialParameterValues0
-                self.heldParameterBool = False
+                self.isHeldParameter = False
                 self.heldParameterList = None
                 
     #
     # Various options for normalization
     #
-    def NormBasic(self, X, Y, parameterValues, independentValues):
+    def normBasic(self, X, Y, parameterValues, independentValues):
         """
         Must guess at bin sizes for first and last bins
         """
@@ -194,22 +200,33 @@ class ScalingTheory:
         norm += Y[-1]*(X[-1]-X[-2])
         return Y/norm
     
-    def NormIntegerSum(self, X, Y, parameterValues, independentValues, \
-                xStart=1., xEnd=1024.):
+    def normIntegerSum(self, X, Y, parameterValues, independentValues):
         """
         Function summed over positive integers equals one; brute force
         up to xEnd
         """
-        x = scipy.arange(xStart, xEnd)
+        xMax = X[-1]+1
+        print xMax
+        x = scipy.arange(1, xMax)
         return Y/sum(self.Y(x, parameterValues, independentValues))
         
-    def NormLog(self,X,Y,parameterValues, independentValues):
+    def normLog(self,X,Y,parameterValues, independentValues):
         """
         This kind of normalization is correct
         if the data are uniform in log scale,
         as prepared by our code toBinDistributions.py
         """
         lgX = scipy.log10(X)
-        D = scipy.around(lgX[1] - lgX[0],2)
+        D = lgX[1] - lgX[0]
         bins = 10**(lgX+D/2.) - 10**(lgX-D/2.)
+        return Y/scipy.sum(Y*bins)
+    
+    def normLogNotUniform(self,X,Y,parameterValues, independentValues):
+        """
+        Normalization for data non-uniform in log scale;
+        uses a and delta as chosen by Lasse
+        """
+        a = 1.4
+        d = 1.4
+        bins = [a**n*d for n in range(len(X))]
         return Y/sum(Y*bins)

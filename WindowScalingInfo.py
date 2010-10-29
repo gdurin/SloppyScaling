@@ -145,6 +145,6 @@ if os.getlogin() == 'yj':
     dataDirectory = "data/" #old data with problematic A10, and A01, but A11 are okay
     dataDirectory = "data02_18/" #fixed A10 and A01 files, and only A10 are binned
 elif os.getlogin() == 'gf':
-    dataDirectory = "/home/meas/WinSim/NonLinear/data/"
+    dataDirectory = "/home/gf/meas/WinSim/NonLinear/data/"
 
 Symbol, Color = Utils.MakeSymbolsAndColors(independentValues)

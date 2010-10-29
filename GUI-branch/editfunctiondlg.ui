@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>744</width>
-    <height>565</height>
+    <height>648</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -807,7 +807,7 @@ p, li { white-space: pre-wrap; }
            <bool>false</bool>
           </property>
           <property name="currentIndex">
-           <number>2</number>
+           <number>0</number>
           </property>
           <property name="maxVisibleItems">
            <number>4</number>
@@ -815,6 +815,11 @@ p, li { white-space: pre-wrap; }
           <property name="frame">
            <bool>true</bool>
           </property>
+          <item>
+           <property name="text">
+            <string>None</string>
+           </property>
+          </item>
           <item>
            <property name="text">
             <string>+</string>

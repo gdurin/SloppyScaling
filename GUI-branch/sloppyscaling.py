@@ -1,15 +1,37 @@
 from __future__ import division
-import scipy
-import pylab
+import matplotlib.pyplot as plt
 import copy
-from scipy import exp
+import scipy as sp
+from scipy import exp, log
 import scipy.optimize
 import scipy.special
 
 import WindowScalingInfo as WS
 reload(WS)
 
+MARKERS = ['o','^','v', '<','>','s','+','*','D','1','h']*8
+           #'v': 'triangle_down',
+           #'<': 'triangle_left',
+           #'>': 'triangle_right',
+           #'s': 'square',
+           #'+': 'plus',
+           #'x': 'cross',
+           #'*': 'star',
+           #'D': 'diamond',
+           #'d': 'thin_diamond',
+           #'1': 'tripod_down',
+           #'2': 'tripod_up',
+           #'3': 'tripod_left',
+           #'4': 'tripod_right',
+           #'h': 'hexagon',
+           #'H': 'rotated_hexagon',
+           #'p': 'pentagon',
+           #'|': 'vertical_line',
+           #'_': 'horizontal_line',
+           #'.': 'dots',
+           #}
 
+COLORS = ['b','g', 'r', 'c','m', 'y', 'k', 'w']*11
 
 
 class Data:
@@ -34,9 +56,9 @@ class Data:
         self.defaultFractionalError = {}
         self.initialSkip = {}
         
-    def InstallCurve(self, independent, fileName, defaultFractionalError = 0.1,\
+    def installCurve(self, independent, fileName, defaultFractionalError = 0.1,\
                      pointSymbol="o", pointColor="b", \
-                     xCol=0, yCol=1, errorCol = 2, initialSkip = 0, factorError = 10.0):
+                     xCol=0, yCol=1, errorCol=2, initialSkip=0, checkNorm=False, factorError=10.0):
         """
         Curves for independent control parameters given by "independent"
         loaded from "fileName". Plots use, for example, pointSymbol from 
@@ -54,25 +76,30 @@ class Data:
         #
         self.experiments.append(independent)
         self.fileNames[independent] = fileName
-        self.initialSkip[independent] = initialSkip
+        self.initialSkip[independent] = 0
         self.pointType[independent] = pointColor + pointSymbol
         self.defaultFractionalError[independent] = defaultFractionalError
         try:
             infile = open(fileName, 'r')
-            lines = infile.readlines()
+            dataArray = sp.loadtxt(infile)
             infile.close()
             success = 1
-            numbers = [line.split() for line in lines]
-            self.X[independent] = scipy.array( \
-                        [float(line[xCol]) for line in numbers])
-            self.Y[independent] = scipy.array( \
-                        [float(line[yCol]) for line in numbers])
-            if not errorCol:
-                self.errorBar[independent] =  \
-                        scipy.array([float(line[errorCol])*factorError for line in numbers])
+            self.X[independent] = dataArray[initialSkip:,xCol]
+            self.Y[independent] = dataArray[initialSkip:,yCol]
+            if initialSkip!=0 and checkNorm:
+                if checkNorm == 'normLog':
+                    lgX = scipy.log10(self.X[independent])
+                    D = lgX[1] - lgX[0]
+                    bins = 10**(lgX+D/2.) - 10**(lgX-D/2.)
+                    self.Y[independent] = self.Y[independent]/scipy.sum(self.Y[independent]*bins)
+            cols = dataArray.shape[1]
+            if errorCol >= 2 and cols > 2:
+                self.errorBar[independent] =  dataArray[initialSkip:,errorCol] * factorError
             else:
+                print "Errors not found"
                 self.errorBar[independent] = \
                     self.Y[independent] * defaultFractionalError
+            
         except IOError:
             print "File %s not found"%fileName
             success = 0
@@ -99,27 +126,19 @@ class Model:
             if i == 0:
                 J = thJacobian
             else:
-                J = scipy.concatenate((J,thJacobian),1)
+                J = sp.concatenate((J,thJacobian),1)
         return J
         
-    def dictResidual(self, parameterValues):
-        residuals = {}
-        for independentValues in self.data.experiments:
-            initialSkip = self.data.initialSkip[independentValues]
-            X = self.data.X[independentValues][initialSkip:]
-            Y = self.data.Y[independentValues][initialSkip:]
-            errorBar = self.data.errorBar[independentValues][initialSkip:]
-            Ytheory = self.theory.Y(X, parameterValues, independentValues)
-            res = (Ytheory-Y)/errorBar
-            residuals[independentValues] = res
-        return residuals
         
-    def Residual(self, parameterValues):
+    def residual(self, parameterValues, dictResiduals=False):
         """
         Calculate the weighted residuals,
         with the weights = 1 / errorbar
         """
-        residuals = scipy.array([])
+        if dictResiduals:
+            residuals = {}
+        else:
+            residuals = sp.array([])
             
         for independentValues in self.data.experiments:
             initialSkip = self.data.initialSkip[independentValues]
@@ -128,17 +147,13 @@ class Model:
             errorBar = self.data.errorBar[independentValues][initialSkip:]
             Ytheory = self.theory.Y(X, parameterValues, independentValues)
             res = (Ytheory-Y)/errorBar
-            residuals = scipy.concatenate((residuals,res))
+            #res = (scipy.log10(Ytheory)-scipy.log10(Y))/errorBar
+            if dictResiduals:
+                residuals[independentValues] = res
+            else:
+                residuals = sp.concatenate((residuals,res))
         return residuals
         
-    def Cost(self, parameterValues=None):
-        """
-        Sum of the squares of the residuals
-        """
-        if parameterValues is None:
-            parameterValues = self.theory.initialParameterValues
-        residuals = self.Residual(parameterValues)
-        return sum(residuals*residuals)
     
     def SST(self, parameterValues=None):
         """
@@ -151,7 +166,7 @@ class Model:
             initialSkip = self.data.initialSkip[independentValues]
             Y = self.data.Y[independentValues][initialSkip:]
             errorBar = self.data.errorBar[independentValues][initialSkip:]
-            sst_partial = (Y-scipy.mean(Y))/errorBar
+            sst_partial = (Y-sp.mean(Y))/errorBar
             sst += sum(sst_partial*sst_partial)
         return sst
     
@@ -161,25 +176,10 @@ class Model:
         where SST is the sum of the squares about the mean
         """
         sst = self.SST(parameterValues)
-        cost = self.Cost(parameterValues)
+        cost = self.cost(parameterValues)
         return 1.- cost/sst
         
-    def getLabel(self, names, values, withRescale = False, sigma = 0.387):
-        """
-        Get the Labels to be plotted. 
-        """
-        #lb_name = (names[-1] ==  ',') and names[:-1] or names[-1]
-        lb = names + " = "
-        lb += ",".join([str(i) for i in values])
-        
-        if withRescale:
-            for nm, val in zip(a,b):
-                exec(nm + "= " + str(val))
-            if len(values) == 2:
-                lb += str(1.0*k/L)
-            elif len(values) == 3:
-                lb += str((1.0*k/L)**sigma*W)[0:5]
-        return lb
+
     
     def getAxis(self,X,Y):
         """
@@ -191,31 +191,31 @@ class Model:
             #YJC: checking if values are negative, if yes, return 0 and break
             if j <0 or i <0:
                 return 0
-            log_i = scipy.log10(i)
-            d, I = scipy.modf(log_i)
+            log_i = sp.log10(i)
+            d, I = sp.modf(log_i)
             if log_i < 0:
-                add = 0.5 *(scipy.absolute(d)<0.5)
+                add = 0.5 *(sp.absolute(d)<0.5)
             else:
-                add = 0.5 *(scipy.absolute(d)>0.5)
-            m = scipy.floor(log_i) + add
+                add = 0.5 *(sp.absolute(d)>0.5)
+            m = sp.floor(log_i) + add
             out.append(10**m)
-            log_j = scipy.log10(j)
-            d, I = scipy.modf(log_j)
+            log_j = sp.log10(j)
+            d, I = sp.modf(log_j)
             if log_j < 0:
-                add = - 0.5 *(scipy.absolute(d)>0.5)
+                add = - 0.5 *(sp.absolute(d)>0.5)
             else:
-                add = - 0.5 *(scipy.absolute(d)<0.5)
-            m = scipy.ceil(log_j) + add
+                add = - 0.5 *(sp.absolute(d)<0.5)
+            m = sp.ceil(log_j) + add
             out.append(10**m)
         return tuple(out)
         
-    def PlotFunctions(self, parameterValues=None, plotCollapse = False, 
+    def plotFunctions(self, parameterValues=None, plotCollapse = False, 
                 fontSizeLabels = 18, fontSizeLegend=12, pylabLegendLoc=(0.,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
-        # XXX Having problems with pylab.ioff()
-        pylab.ioff()
-        pylab.clf()
+        # XXX Having problems with plt.ioff()
+        plt.ioff()
+        plt.clf()
         ax0 = [1.e99,0,1.e99,0]
         if self.data.linlog == 'log':
             minY = 1.e99
@@ -227,7 +227,7 @@ class Model:
                                            independentValues)
                 minY = min(minY,min(Y))
         
-        #pylab.plot([],label=r'$win (k/L)^{\sigma_k \zeta}$')
+        #plt.plot([],label=r'$win (k/L)^{\sigma_k \zeta}$')
         
         if self.sorting:
             # preserve order of values as provided
@@ -262,16 +262,16 @@ class Model:
                 
             # Prepare the labels
             lb = self.getLabel(self.theory.independentNames, independentValues)
-            pylab.rcParams.update({'legend.fontsize':fontSizeLabels})
+            plt.rcParams.update({'legend.fontsize':fontSizeLabels})
             #####################
             if self.data.linlog == 'log' or self.data.linlog == 'lin':
                 if self.data.linlog == 'log':
-                    plot_fn = getattr(pylab,'loglog')
+                    plot_fn = getattr(plt,'loglog')
                 elif self.data.linlog == 'lin':
-                    plot_fn = getattr(pylab,'plot')
+                    plot_fn = getattr(plt,'plot')
                 # Plot first data with their error
                 plot_fn(X,Y,pointType[1])
-                pylab.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
+                plt.errorbar(X,Y, yerr=y_error, fmt=pointType,label=lb)
                 axis_dep = self.getAxis(X,Y)
                 # Get the current values of the axis
                 # YJC: some values of binned data are negative, modified getAxis to check, and return 0 if negative values encountered 
@@ -286,28 +286,28 @@ class Model:
                 print "Format " + self.data.linlog + \
                         " not supported yet in PlotFits"
                 
-        pylab.axis(tuple(ax0))
-        #pylab.legend(loc=pylabLegendLoc, col=2)
-        pylab.legend(loc=pylabLegendLoc)
+        plt.axis(tuple(ax0))
+        #plt.legend(loc=pylabLegendLoc, col=2)
+        plt.legend(loc=pylabLegendLoc)
         if plotCollapse:
-            pylab.xlabel(self.theory.XscaledLatex, fontsize=fontSizeLabels)
-            pylab.ylabel(self.theory.YscaledLatex, fontsize=fontSizeLabels)
-            pylab.title(self.theory.scalingTitle)
+            plt.xlabel(self.theory.XscaledLatex, fontsize=fontSizeLabels)
+            plt.ylabel(self.theory.YscaledLatex, fontsize=fontSizeLabels)
+            plt.title(self.theory.scalingTitle)
         else:
-            pylab.xlabel(self.theory.XLatex, fontsize=fontSizeLabels)
-            pylab.ylabel(self.theory.YLatex, fontsize=fontSizeLabels)
-            pylab.title(self.theory.title, fontsize=fontSizeLabels)
-        # XXX Turn on if ioff used pylab.ion()
-        pylab.ion()
-        pylab.show()
+            plt.xlabel(self.theory.XLatex, fontsize=fontSizeLabels)
+            plt.ylabel(self.theory.YLatex, fontsize=fontSizeLabels)
+            plt.title(self.theory.title, fontsize=fontSizeLabels)
+        # XXX Turn on if ioff used plt.ion()
+        plt.ion()
+        plt.show()
         
-    def PlotResiduals(self, parameterValues=None, \
+    def plotResiduals(self, parameterValues=None, \
                       fontSizeLabels = 18, pylabLegendLoc=(0.2,0.)):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
-        pylab.ioff()
-        pylab.clf()
-        residuals = self.dictResidual(parameterValues)
+        plt.ioff()
+        plt.clf()
+        residuals = self.residual(parameterValues, dictResiduals=True)
         x0 = 0
         for independentValues in sorted(residuals):
             res = residuals[independentValues]
@@ -316,27 +316,27 @@ class Model:
             x0 += xStep
             pointType = self.data.pointType[independentValues]
             lb = self.getLabel(self.theory.independentNames, independentValues)
-            pylab.plot(x,res,pointType, label=lb)
-        pylab.ylabel("Weighted residuals")
-        pylab.axhline(y=0,color='k')
-        pylab.legend(loc=pylabLegendLoc)
-        pylab.ion()
-        pylab.show()
+            plt.plot(x,res,pointType, label=lb)
+        plt.ylabel("Weighted residuals")
+        plt.axhline(y=0,color='k')
+        plt.legend(loc=pylabLegendLoc)
+        plt.ion()
+        plt.show()
         
-    def BestFit(self,initialParameterValues = None,isJacobian=True):
+    def bestFit(self,initialParameterValues = None,isJacobian=True):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         if isJacobian:
             jacobian = self.jacobian
-            out = scipy.optimize.minpack.leastsq(self.Residual, \
+            out = scipy.optimize.minpack.leastsq(self.residual, \
                 initialParameterValues,Dfun=jacobian, \
                 col_deriv=True, warning=True, full_output=1, ftol=1.e-16) 
         else:
-            out = scipy.optimize.minpack.leastsq(self.Residual, \
+            out = scipy.optimize.minpack.leastsq(self.residual, \
                 initialParameterValues, full_output=1, ftol=1.e-16) 
         return out
     
-    def PlotBestFit(self, initialParameterValues = None, \
+    def plotBestFit(self, initialParameterValues = None, \
                     figFit = 1, figCollapse=2, fontSizeLabels=18, heldParams = None):
         
         #YJC: added abilitiy to set fixedParams for this, and also modified output to match what is done in composite theory
@@ -363,11 +363,11 @@ class Model:
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         
-        print 'initial cost = ', self.Cost(initialParameterValues)
-        optimizedParameterValues = self.BestFit(initialParameterValues)[0]
-        covar = self.BestFit(initialParameterValues)[1]
+        print 'initial cost = ', self.cost(initialParameterValues)
+        optimizedParameterValues = self.bestFit(initialParameterValues)[0]
+        covar = self.bestFit(initialParameterValues)[1]
         errors = [covar[i,i]**0.5 for i in range(len(covar))]
-        print 'optimized cost = ', self.Cost(optimizedParameterValues)
+        print 'optimized cost = ', self.cost(optimizedParameterValues)
         print 'R-value = ', self.R_square(optimizedParameterValues)
         
         if heldParams:
@@ -380,13 +380,13 @@ class Model:
                 zip(self.theory.parameterNameList,optimizedParameterValues, errors):
             print name + "= %2.4f +/- %2.4f" %(val, error)
         print "======================================================"
-        pylab.figure(figFit)
-        self.PlotFunctions(optimizedParameterValues)
-        pylab.figure(figCollapse)
-        self.PlotFunctions(optimizedParameterValues, plotCollapse = True)        
+        plt.figure(figFit)
+        self.plotFunctions(optimizedParameterValues)
+        plt.figure(figCollapse)
+        self.plotFunctions(optimizedParameterValues, plotCollapse = True)        
         #YJC: need to call these twice to show figures properly
-        pylab.figure(figFit)
-        pylab.figure(figCollapse)
+        plt.figure(figFit)
+        plt.figure(figCollapse)
         return optimizedParameterValues
 
 class CompositeModel:
@@ -404,13 +404,13 @@ class CompositeModel:
             self.parameterNameList = []
             
     def __init__(self, name):
-        self.Models = {}
+        self.models = {}
         self.theory = self.CompositeTheory()
         self.name = name
         self.heldParamsPass = False
         
-    def InstallModel(self,modelName, model):
-        self.Models[modelName] = model
+    def installModel(self,modelName, model):
+        self.models[modelName] = model
         th = self.theory
         for param, init in zip(model.theory.parameterNameList, \
                                 model.theory.initialParameterValues):
@@ -435,7 +435,7 @@ class CompositeModel:
         #
         # Update list of parameter names and values for all attached models
         #
-        for currentModel in self.Models.values():
+        for currentModel in self.models.values():
             currentModel.theory.parameterNames=th.parameterNames
             currentModel.theory.parameterNames0=th.parameterNames
             currentModel.theory.parameterNameList=th.parameterNameList
@@ -474,7 +474,7 @@ class CompositeModel:
             th.parameterNames = pNames
             th.parameterNameList = pNames.split(",")
             th.initialParameterValues = pValues
-            for currentModel in self.Models.values():
+            for currentModel in self.models.values():
                 currentModel.theory.heldParameterBool = True
                 currentModel.theory.holdFixedParams(heldParameters)
             self.heldParamsPass = True
@@ -483,30 +483,29 @@ class CompositeModel:
                 th.parameterNames = th.parameterNames0
                 th.parameterNameList = th.parameterNameList0
                 th.initialParameterValues = th.initialParameterValues0
-                for currentModel in self.Models.values():
+                for currentModel in self.models.values():
                     currentModel.theory.parameterNames=th.parameterNames0
                     currentModel.theory.parameterNameList=th.parameterNameList0
                     currentModel.theory.initialParameterValues=th.initialParameterValues0
                     currentModel.theory.heldParameterBool = False
                     currentModel.theory.heldParameterList = None
 
-    def Residual(self, parameterValues):
-        residuals = scipy.array([])
-        for model in self.Models.values():
-            modelResidual = model.Residual(parameterValues)
-            residuals = scipy.concatenate((residuals,modelResidual))
+    def residual(self, parameterValues):
+        residuals = sp.array([])
+        for model in self.models.values():
+            residuals = sp.concatenate((residuals,model.residual(parameterValues)))
         return residuals
         
-    def Cost(self, parameterValues=None):
+    def cost(self, parameterValues=None):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
-        residuals = self.Residual(parameterValues)
+        residuals = self.residual(parameterValues)
         return sum(residuals*residuals)
-        #return sum(scipy.absolute(residuals))
+        #return sum(sp.absolute(residuals))
     
     def SST(self, parameterValues=None):
         sst = 0.
-        for model in self.Models.values():
+        for model in self.models.values():
             sst += model.SST(parameterValues)        
         return sst
         
@@ -516,54 +515,54 @@ class CompositeModel:
         where SST is the sum of the squares about the mean
         """
         sst = self.SST(parameterValues)
-        cost = self.Cost(parameterValues)
+        cost = self.cost(parameterValues)
         return 1.- cost/sst
         
-    def PlotFits(self, parameterValues=None, \
+    def plotFits(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.), figNumStart=1):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         figNum = figNumStart-1
-        for model in self.Models.values():
+        for model in self.models.values():
             figNum+=1
-            pylab.figure(figNum)
-            model.PlotFits(parameterValues, fontSizeLabels, pylabLegendLoc)
+            plt.figure(figNum)
+            model.plotFits(parameterValues, fontSizeLabels, pylabLegendLoc)
             # Weird bug: repeating figure needed to get to show
-            pylab.figure(figNum)
+            plt.figure(figNum)
             
-    def PlotCollapse(self, parameterValues=None, \
+    def plotCollapse(self, parameterValues=None, \
                  fontSizeLabels = 18, pylabLegendLoc=(0.2,0.), figNumStart=1):
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         figNum = figNumStart-1
-        for model in self.Models.values():
+        for model in self.models.values():
             figNum+=1
-            pylab.figure(figNum)
-            model.PlotFunctions(parameterValues, fontSizeLabels, \
+            plt.figure(figNum)
+            model.plotFunctions(parameterValues, fontSizeLabels, \
                                 pylabLegendLoc, plotCollapse = True)
-            pylab.figure(figNum)
+            plt.figure(figNum)
             
     def jacobian(self, parameterValues):
-        for i,model in enumerate(self.Models.values()):
+        for i,model in enumerate(self.models.values()):
             if i == 0:
                 J = model.jacobian(parameterValues)
             else:
                 J = numpy.concatenate((J,model.jacobian(parameterValues)),1)
         return J
             
-    def BestFit(self,initialParameterValues=None,isJacobian=True):
+    def bestFit(self,initialParameterValues=None,isJacobian=True):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
-        #if isJacobian:
-        outWith = scipy.optimize.minpack.leastsq(self.Residual, \
+        if isJacobian:
+            out = scipy.optimize.minpack.leastsq(self.residual, \
                 initialParameterValues, Dfun=self.jacobian, \
                 col_deriv=True, warning=True, full_output=1, ftol=1.e-16)
-        #else:
-        out = scipy.optimize.minpack.leastsq(self.Residual, \
+        else:
+            out = scipy.optimize.minpack.leastsq(self.residual, \
                 initialParameterValues, full_output=1, ftol = 1e-16) 
-        return outWith,out
+        return out
         
-    def PlotBestFit(self, initialParameterValues=None, \
+    def plotBestFit(self, initialParameterValues=None, \
                     figNumStart = 1, heldParams = None):
         from time import time
         t0 = time()
@@ -591,55 +590,55 @@ class CompositeModel:
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
 
-        print 'initial cost = ', self.Cost(initialParameterValues)
-        outs = self.BestFit(initialParameterValues)
-        for out in outs:
-            print out[0]
-            optimizedParameterValues = out[0]
-            covar = out[1]
-            errors = [covar[i,i]**0.5 for i in range(len(covar))]
-            #errors = [1 for i in range(len(optimizedParameterValues))]        
-            #inv_t_student = scipy.special.stdtrit(len(errors),0.90)
-            #errors = inv_t_student*errors
-            print 'optimized cost = ', self.Cost(optimizedParameterValues)
-            #print 'optimized SST = ', self.SST(optimizedParameterValues)
-            #print 'R-value = ', self.R_square(optimizedParameterValues)
-            #print
-            if heldParams:
-                print "=== Held parameters ================"
-                for pName,pValue in heldParams:
-                    if pName in uniSymbol:
-                        print "%3s = %2.2f" % (uniSymbol[pName], pValue)
-                    else:
-                        print "%3s = %2.2f" % (pName, pValue)
-            # Print parameter values
-            # YJC: changed printing here to print one sigma error instead of 95% confidence level
-            print "=== Fitting parameters (with one sigma error)=============="
-            for name, val, error in \
-                zip(self.theory.parameterNameList,optimizedParameterValues, errors):
-                if name in uniSymbol:
-                    print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
+        print 'initial cost = ', self.cost(initialParameterValues)
+        out = self.bestFit(initialParameterValues)
+        
+        print out[0]
+        optimizedParameterValues = out[0]
+        covar = out[1]
+        errors = [covar[i,i]**0.5 for i in range(len(covar))]
+        #errors = [1 for i in range(len(optimizedParameterValues))]        
+        #inv_t_student = sp.special.stdtrit(len(errors),0.90)
+        #errors = inv_t_student*errors
+        print 'optimized cost = ', self.cost(optimizedParameterValues)
+        #print 'optimized SST = ', self.SST(optimizedParameterValues)
+        #print 'R-value = ', self.R_square(optimizedParameterValues)
+        #print
+        if heldParams:
+            print "=== Held parameters ================"
+            for pName,pValue in heldParams:
+                if pName in uniSymbol:
+                    print "%3s = %2.2f" % (uniSymbol[pName], pValue)
                 else:
-                    print "%3s = %2.3f +/- %2.3f" %(name, val, error)
-            print "====================================="
-            print "n. of function calls = ", out[2]['nfev']
-            print out[3:]
-            #
-            # Print plots
-            #
-            figNum = figNumStart-1
-            for model in self.Models.values():
-                for FT in [False,True]:
-                    figNum+=1
-                    pylab.figure(figNum)
-                    model.PlotFunctions(optimizedParameterValues, plotCollapse = FT)
-                    # Weird bug: repeating figure needed to get to show
-                    pylab.figure(figNum)
+                    print "%3s = %2.2f" % (pName, pValue)
+        # Print parameter values
+        # YJC: changed printing here to print one sigma error instead of 95% confidence level
+        print "=== Fitting parameters (with one sigma error)=============="
+        for name, val, error in \
+            zip(self.theory.parameterNameList,optimizedParameterValues, errors):
+            if name in uniSymbol:
+                print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
+            else:
+                print "%3s = %2.3f +/- %2.3f" %(name, val, error)
+        print "====================================="
+        print "n. of function calls = ", out[2]['nfev']
+        print out[3:]
+        #
+        # Print plots
+        #
+        figNum = figNumStart-1
+        for model in self.models.values():
+            for FT in [False,True]:
                 figNum+=1
-                pylab.figure(figNum)
-                model.PlotResiduals(optimizedParameterValues)
-                pylab.figure(figNum)
-            #return optimizedParameterValues
-            ts = round(time() - t0, 3)
-            print "*** Time elapsed:", ts
-        return outs
+                plt.figure(figNum)
+                model.plotFunctions(optimizedParameterValues, plotCollapse = FT)
+                # Weird bug: repeating figure needed to get to show
+                plt.figure(figNum)
+            figNum+=1
+            plt.figure(figNum)
+            model.plotResiduals(optimizedParameterValues)
+            plt.figure(figNum)
+        #return optimizedParameterValues
+        ts = round(time() - t0, 3)
+        print "*** Time elapsed:", ts
+        return out

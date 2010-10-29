@@ -84,7 +84,7 @@ for independent in WS.independentValues:
     else:
         k_string = "_k="
     fileName = "".join([WS.dataDirectory,name,"_W=",str(W).rjust(4, str(0)),\
-                        k_string,str(k), "_System_Size=",str(2*L), "x", str(L), ext])
+                        k_string,str(k), "_L=",str(2*L), "x", str(L), ext])
     success = data.InstallCurve(independent, fileName, \
         pointSymbol=WS.Symbol[independent], \
         pointColor=WS.Color[independent], \
