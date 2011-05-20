@@ -26,7 +26,7 @@ FONTSIZEAXIS = 18
 mpl.rcParams.update({'legend.fontsize':FONTSIZELABELS})
 #sys.setrecursionlimit(1500)
 
-myDir = "/home/gf/meas/Simulation/LIM"
+myDir = "/home/gf/meas/Simulation/ZigZag"
 
 
 dirs = 'images','files', 'functions'
@@ -107,7 +107,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
         self.filename = None
         self.printer = None
         self.parameterNames = {}
-        self.isDataLoad = False
+        self.isDataLoaded = False
         self.isRunFitting = False
         self.setupUi(self)
         self.linlog = 'log' # To be set properly
@@ -175,7 +175,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
         self.functionLines = {}
         self.errorBars = {}
         # Setup the lists of canvas and the navtoolbars if not previous done 
-        if not self.isDataLoad:
+        if not self.isDataLoaded:
             self.figureCanvas = []
             self.navToolBar = []        
         # 
@@ -209,7 +209,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
         self.modelKeys = sorted(self.compositeModule.models)
         for i, key in enumerate(self.modelKeys):
             # First prepare the tab in the widget
-            if not self.isDataLoad:
+            if not self.isDataLoaded:
                 setTab = "tab_%s" % i
                 # The first tab "ta_0" is already set by Qt Designer (should I drop this)?
                 if hasattr(self, setTab):
@@ -232,7 +232,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
             model = self.compositeModule.models[key]
             self.plotRawData(self.figureCanvas[i], model.data)
         self.statusbar.showMessage("Data loaded", 5000)
-        self.isDataLoad = True
+        self.isDataLoaded = True
                 
     def plotRawData(self, figureCanvas, data):
         """
@@ -251,7 +251,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
             errorBar = data.errorBar[independentValues]
             # Avoid error bars crossing zero on log-log plots
             if self.linlog == 'log':
-                errorBarDown = errorBar * (errorBar < Y) + (Y -min(Y)) * (errorBar > Y)
+                errorBarDown = errorBar * (errorBar <= Y) + (Y -min(Y)) * (errorBar > Y)
                 y_error=[errorBarDown,errorBar]
             else:
                 y_error=errorBar
@@ -297,7 +297,6 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
         for independentValues in data.experiments:
             X = data.X[independentValues]
             Y = data.Y[independentValues]
-            Ytheory = theory.Y(X, parameterValues, independentValues)
             pointType = data.pointType[independentValues]
             errorBar = data.errorBar[independentValues]
             if plotCollapse:
@@ -320,7 +319,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
             # Avoid error bars crossing zero on log-log plots
             if self.linlog == 'log':
                 errorBarDown = errorBar * (errorBar < Y) + (Y -min(Y)) * (errorBar > Y)
-                y_error=[errorBarDown,errorBar]
+                y_error=(errorBarDown,errorBar)
             else:
                 y_error=errorBar
             # Prepare the labels
@@ -335,7 +334,6 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
                     self.dataPoints[figureCanvas, independentValues] = data_points
                     self.errorBars[figureCanvas, independentValues] = \
                         figureCanvas.axes.errorbar(X,Y, yerr=y_error, fmt=pointType)
-                    #print self.errorBars
                     function_line, = figureCanvas.axes.loglog(Xtheory, Ytheory)
                     function_line.set_color(pointType[0])
                     function_line.set_marker('None')
@@ -343,9 +341,17 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
                     self.functionLines[figureCanvas, independentValues] = function_line
                 else:
                     self.dataPoints[figureCanvas, independentValues].set_data(X,Y)
-                    self.errorBars[figureCanvas, independentValues].set_data(X,Y, yerr=y_error, fmt=pointType)
+                    plotline, caplines, barlinecols = self.errorBars[figureCanvas, independentValues]
+                    if type(y_error).__name__ == "tuple":
+                        error_positions = (X,Y - y_error[0]), (X, Y + y_error[1])
+                        barlinecols[0].set_segments(zip(zip(X,Y-y_error[0]), zip(X,Y+y_error[1])))
+                    else:
+                        error_positions = (X,Y - y_error), (X, Y + y_error)
+                        barlinecols[0].set_segments(zip(zip(X,Y-y_error), zip(X,Y+y_error)))
+                    for i,pos in enumerate(error_positions):
+                        caplines[i].set_data(pos)
                     self.functionLines[figureCanvas, independentValues].set_data(Xtheory, Ytheory)
-            else:
+            else: # No plot collapse
                 if not self.isRunFitting:
                     function_line, = figureCanvas.axes.loglog(X, Ytheory, label=lb)
                     function_line.set_color(pointType[0])
@@ -405,7 +411,7 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
 
     @QtCore.pyqtSignature("")         
     def on_startFittingRunAction_triggered(self):
-        if not self.isDataLoad:
+        if not self.isDataLoaded:
             e = "Error: please first load data"
             QtGui.QMessageBox.warning(self, e, e)
             return
@@ -413,10 +419,11 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
         # initialParameters
         initialParameterValues = None
         # held Parameters
-        #heldParams = [('sigma_k', 0.34)]
-        #heldParams = [('H_c', 0.8), ('b', 1.05)]
-        #heldParams = [('n', 0.65)]
-        heldParams = None
+        #heldParams = [('tau_0',1.05), ('tau_1',1.25),('b',3.)]
+        #heldParams = [('H_c', 0.65), ('k',2.)]
+        heldParams = [('H_c', 0.8)]
+        #heldParams = [('tau', 1.27)]
+        #heldParams = None
         composite = self.compositeModule
         nModels = len(composite.models)
         if not self.isRunFitting:
@@ -447,16 +454,23 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
         # if original Names and values have to be used
         composite.holdFixedParams(heldParams)
         if initialParameterValues is None:
-            initialParameterValues = composite.theory.initialParameterValues
+            initialParameterValues = composite.initialParameterValues
 
-        print 'initial cost = ', composite.cost(initialParameterValues)
+        print 'initial cost = %s (StD: %s)' % composite.cost(initialParameterValues)
+        print "initial Parameters = ", initialParameterValues
         out = composite.bestFit(initialParameterValues)
-        
-        print out[0]
         optimizedParameterValues = out[0]
+        costValue, costStdDev = composite.cost(optimizedParameterValues)
+        print 'optimized cost = %s (StD: %s)' % (costValue, costStdDev)
         covar = out[1]
-        errors = [covar[i,i]**0.5 for i in range(len(covar))]
-        print 'optimized cost = ', composite.cost(optimizedParameterValues)
+        if covar is not None:
+            # Error estimation!!!!!!!!!!!! TO BE FIXED
+            errors = costStdDev * np.array([covar[i,i]**0.5 for i in range(len(covar))])
+            print [covar[i,i]  for i in range(len(covar))]
+            print "shape", covar.shape
+            print errors
+        else:
+            errors = None
         if heldParams:
             print "=== Held parameters ================"
             for pName,pValue in heldParams:
@@ -466,13 +480,21 @@ class MainWindow(QtGui.QMainWindow,ui_main.Ui_MainWindow):
                     print "%3s = %2.2f" % (pName, pValue)
         # Print parameter values
         # YJC: changed printing here to print one sigma error instead of 95% confidence level
-        print "=== Fitting parameters (with one sigma error)=============="
-        for name, val, error in \
-            zip(composite.theory.parameterNameList,optimizedParameterValues, errors):
-            if name in uniSymbol:
-                print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
-            else:
-                print "%3s = %2.3f +/- %2.3f" %(name, val, error)
+        print "=== Fitting parameters (with one sigma error)=============="                    
+        if errors is not None:
+            for name, val, error in \
+                zip(composite.parameterNameList,optimizedParameterValues, errors):
+                if name in uniSymbol:
+                    print "%3s = %2.3f +/- %2.3f" %(uniSymbol[name], val, error)
+                else:
+                    print "%3s = %2.3f +/- %2.3f" %(name, val, error)
+        else:
+            for name, val in \
+                zip(composite.parameterNameList,optimizedParameterValues):
+                if name in uniSymbol:
+                    print "%3s = %2.3f " %(uniSymbol[name], val)
+                else:
+                    print "%3s = %2.3f" %(name, val)
         print "====================================="
         print "n. of function calls = ", out[2]['nfev']
         print out[3:]

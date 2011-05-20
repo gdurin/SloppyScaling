@@ -3,11 +3,15 @@ import scalingtheory
 import WindowScalingInfo as WS
 from sloppyscaling import Data, Model
 import getData
+import scipy as sp
 
 corrections_to_scaling = None
-normalization = None
-check_normalization = normalization
-initialSkipOnLoad = 15 #Skip data when LOADING
+normalization = "normLog"
+initialSkipIndex = 0 #Skip data when LOADING
+initialSkipValue = 0.01 # P(Hc) - Lasse
+#initialSkipValue = 2. # RfimDip
+#initialSkipValue = 0 # Stefano
+
 
 # Colors and shapes for data points for plots
 # (shared between different data types)
@@ -43,7 +47,10 @@ class Module():
 
         name = fvars['Yname'] # This is the name used in the files
         self.name = name.replace("__","")
-        fvars['initialParameterValues'] = (1.1, 1.2, .81, 1.0,10.)
+        fvars['initialParameterValues'] = (1.12, 1.3,1.,0.1, 1.6, .75, 1.,50.0) # Lasse
+        #fvars['initialParameterValues'] = (1.12, 1.3,3.,20., .6, .75,1e-2) # RFimDip        
+        #fvars['initialParameterValues'] = (1.12, 1.3) # Stefano
+        #fvars['initialParameterValues'] = (1.2, 1.3,.6,1.,50.0)
         fvars['deriv'] = fvars['derivNoCorrections']
         if corrections_to_scaling:
             fvars['Yvalue'] = fvars['Yvalue'] + fvars['Ysign'] + fvars['Ycorrections']
@@ -64,7 +71,12 @@ class Module():
             symbol, color = sc.next()
             success = self.data.installCurve(independent, fileName, \
                                         pointSymbol=symbol, pointColor=color, \
-                                        initialSkip=initialSkipOnLoad, checkNorm=check_normalization)
+                                        initialSkipIndex=initialSkipIndex, initialSkipValue=initialSkipValue)
+            if normalization == 'normLog':
+                lgX = sp.log10(self.data.X[independent])
+                D = lgX[1] - lgX[0]
+                bins = 10**(lgX+D/2.) - 10**(lgX-D/2.)
+                self.theory.normFactor[independent] = sp.sum(bins*self.data.Y[independent])
             loaded += success
         nFiles = len(independentValues)
         if loaded ==  nFiles:

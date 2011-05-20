@@ -1,37 +1,11 @@
 from __future__ import division
 import matplotlib.pyplot as plt
 import copy
+import numpy as np
 import scipy as sp
 from scipy import exp, log
 import scipy.optimize
 import scipy.special
-
-import WindowScalingInfo as WS
-reload(WS)
-
-MARKERS = ['o','^','v', '<','>','s','+','*','D','1','h']*8
-           #'v': 'triangle_down',
-           #'<': 'triangle_left',
-           #'>': 'triangle_right',
-           #'s': 'square',
-           #'+': 'plus',
-           #'x': 'cross',
-           #'*': 'star',
-           #'D': 'diamond',
-           #'d': 'thin_diamond',
-           #'1': 'tripod_down',
-           #'2': 'tripod_up',
-           #'3': 'tripod_left',
-           #'4': 'tripod_right',
-           #'h': 'hexagon',
-           #'H': 'rotated_hexagon',
-           #'p': 'pentagon',
-           #'|': 'vertical_line',
-           #'_': 'horizontal_line',
-           #'.': 'dots',
-           #}
-
-COLORS = ['b','g', 'r', 'c','m', 'y', 'k', 'w']*11
 
 
 class Data:
@@ -55,10 +29,11 @@ class Data:
         self.fileNames = {}
         self.defaultFractionalError = {}
         self.initialSkip = {}
+        self.totalSum = {}
         
-    def installCurve(self, independent, fileName, defaultFractionalError = 0.1,\
+    def installCurve(self, independent, fileName, defaultFractionalError = 0.3,\
                      pointSymbol="o", pointColor="b", \
-                     xCol=0, yCol=1, errorCol=2, initialSkip=0, checkNorm=False, factorError=10.0):
+                     xCol=0, yCol=1, errorCol=2, initialSkipIndex=0, initialSkipValue=None, factorError=1.0):
         """
         Curves for independent control parameters given by "independent"
         loaded from "fileName". Plots use, for example, pointSymbol from 
@@ -84,14 +59,13 @@ class Data:
             dataArray = sp.loadtxt(infile)
             infile.close()
             success = 1
+            if initialSkipValue:
+                x = dataArray[:,xCol]
+                initialSkip = (x>=initialSkipValue).argmax()
+            else:
+                initialSkip = initialSkipIndex
             self.X[independent] = dataArray[initialSkip:,xCol]
             self.Y[independent] = dataArray[initialSkip:,yCol]
-            if initialSkip!=0 and checkNorm:
-                if checkNorm == 'normLog':
-                    lgX = scipy.log10(self.X[independent])
-                    D = lgX[1] - lgX[0]
-                    bins = 10**(lgX+D/2.) - 10**(lgX-D/2.)
-                    self.Y[independent] = self.Y[independent]/scipy.sum(self.Y[independent]*bins)
             cols = dataArray.shape[1]
             if errorCol >= 2 and cols > 2:
                 self.errorBar[independent] =  dataArray[initialSkip:,errorCol] * factorError
@@ -116,13 +90,24 @@ class Model:
         self.data = data
         self.name = name
         self.sorting = sorting
+        
+    def dataTotalNumber(self):
+        """
+        returns the total number of the data to be fitted
+        """
+        n = 0
+        for independentValues in self.data.experiments:
+            initialSkip = self.data.initialSkip[independentValues]
+            n+= len(self.data.X[independentValues][initialSkip:])
+        return n
 
     def jacobian(self, parameterValues):
         for i, independentValues in enumerate(self.data.experiments):
             initialSkip = self.data.initialSkip[independentValues]
             X = self.data.X[independentValues][initialSkip:]
+            Y = self.data.Y[independentValues][initialSkip:]
             errorBar = self.data.errorBar[independentValues][initialSkip:]
-            thJacobian = self.theory.jacobian(X, parameterValues, independentValues)/errorBar
+            thJacobian = self.theory.jacobian(X, Y, parameterValues, independentValues)/errorBar
             if i == 0:
                 J = thJacobian
             else:
@@ -397,32 +382,36 @@ class CompositeModel:
     on the individual theories.
     Also, plots and stuff should be delegated to the individual theories.
     """
-    class CompositeTheory:
-        def __init__(self):
-            self.parameterNames = ""
-            self.initialParameterValues = []
-            self.parameterNameList = []
+    parameterNames = ""
+    initialParameterValues = []
+    parameterNameList = []
+    
+    #class CompositeTheory:
+        #def __init__(self):
+            #self.parameterNames = ""
+            #self.initialParameterValues = []
+            #self.parameterNameList = []
             
     def __init__(self, name):
         self.models = {}
-        self.theory = self.CompositeTheory()
+        #self.theory = self.CompositeTheory()
         self.name = name
         self.heldParamsPass = False
         
     def installModel(self,modelName, model):
         self.models[modelName] = model
-        th = self.theory
+        #th = self.theory
         for param, init in zip(model.theory.parameterNameList, \
                                 model.theory.initialParameterValues):
-            if param not in th.parameterNameList:
-                th.parameterNameList.append(param)
-                th.initialParameterValues.append(init)
+            if param not in CompositeModel.parameterNameList:
+                CompositeModel.parameterNameList.append(param)
+                CompositeModel.initialParameterValues.append(init)
             else:
                 # Check if shared param has consistent initial value
                 # between models
-                paramCurrentIndex = th.parameterNameList.index(param)
+                paramCurrentIndex = CompositeModel.parameterNameList.index(param)
                 paramCurrentInitialValue = \
-                        th.initialParameterValues[paramCurrentIndex]
+                        CompositeModel.initialParameterValues[paramCurrentIndex]
                 if paramCurrentInitialValue != init:
                     print "Initial value %f"%(init,) \
                      + " for parameter " + param + " in model " + modelName \
@@ -430,27 +419,29 @@ class CompositeModel:
                      + " already stored for previous theory in " \
                      + " CompositeTheory.\n Ignoring new value."
                     
-        th.parameterNames = ",".join(th.parameterNameList)
-        #th.initialParameterValues = tuple(th.initialParameterValues)
+        CompositeModel.parameterNames = ",".join(CompositeModel.parameterNameList)
+        # CompositeModel.initialParameterValues = tuple(CompositeModel.initialParameterValues)
         #
         # Update list of parameter names and values for all attached models
         #
         for currentModel in self.models.values():
-            currentModel.theory.parameterNames=th.parameterNames
-            currentModel.theory.parameterNames0=th.parameterNames
-            currentModel.theory.parameterNameList=th.parameterNameList
-            currentModel.theory.parameterNameList0=th.parameterNameList
-            currentModel.theory.initialParameterValues=tuple(th.initialParameterValues)
-            currentModel.theory.initialParameterValues0=tuple(th.initialParameterValues)
+            currentModel.theory.parameterNames=CompositeModel.parameterNames
+            currentModel.theory.parameterNames0=CompositeModel.parameterNames
+            currentModel.theory.parameterNameList=CompositeModel.parameterNameList
+            currentModel.theory.parameterNameList0=CompositeModel.parameterNameList
+            currentModel.theory.initialParameterValues=tuple(CompositeModel.initialParameterValues)
+            currentModel.theory.initialParameterValues0=tuple(CompositeModel.initialParameterValues)
         #
         # Remember original Names and values
-        th.initialParameterValues0 = copy.copy(th.initialParameterValues)
-        th.parameterNames0 = copy.copy(th.parameterNames)
-        th.parameterNameList0 = copy.copy(th.parameterNameList)
+        CompositeModel.initialParameterValues0 = copy.copy(CompositeModel.initialParameterValues)
+        CompositeModel.parameterNames0 = copy.copy(CompositeModel.parameterNames)
+        CompositeModel.parameterNameList0 = copy.copy(CompositeModel.parameterNameList)
         
     def reduceParameters(self,pNames,pValues,heldParams):
         list_params = pNames.split(",")
         list_initials = list(pValues)
+        print list_params
+        print heldParams
         for param_to_remove, val in heldParams:
             try:
                 index = list_params.index(param_to_remove)
@@ -466,30 +457,33 @@ class CompositeModel:
         and updates the parameter values, names of the composite model
         heldParameters is a list of tuple(s) of the type: [('par1', val1)]
         """
-        th = self.theory
         if heldParameters:
-            pNames, pValues = self.reduceParameters(th.parameterNames0,\
-                                                 th.initialParameterValues0,\
-                                                 heldParameters)
-            th.parameterNames = pNames
-            th.parameterNameList = pNames.split(",")
-            th.initialParameterValues = pValues
+            CompositeModel.parameterNames, CompositeModel.initialParameterValues \
+                          = self.reduceParameters(CompositeModel.parameterNames0,\
+                            CompositeModel.initialParameterValues0, heldParameters)
+            CompositeModel.parameterNameList = CompositeModel.parameterNames.split(",")
             for currentModel in self.models.values():
                 currentModel.theory.heldParameterBool = True
                 currentModel.theory.holdFixedParams(heldParameters)
             self.heldParamsPass = True
         else:
             if self.heldParamsPass:
-                th.parameterNames = th.parameterNames0
-                th.parameterNameList = th.parameterNameList0
-                th.initialParameterValues = th.initialParameterValues0
+                CompositeModel.parameterNames = CompositeModel.parameterNames0
+                CompositeModel.parameterNameList = CompositeModel.parameterNameList0
+                CompositeModel.initialParameterValues = CompositeModel.initialParameterValues0
                 for currentModel in self.models.values():
-                    currentModel.theory.parameterNames=th.parameterNames0
-                    currentModel.theory.parameterNameList=th.parameterNameList0
-                    currentModel.theory.initialParameterValues=th.initialParameterValues0
+                    currentModel.theory.parameterNames=CompositeModel.parameterNames0
+                    currentModel.theory.parameterNameList=CompositeModel.parameterNameList0
+                    currentModel.theory.initialParameterValues=CompositeModel.initialParameterValues0
                     currentModel.theory.heldParameterBool = False
                     currentModel.theory.heldParameterList = None
-
+    
+    def dataTotalNumber(self):
+        n = 0
+        for model in self.models.values():
+            n+= model.dataTotalNumber()
+        return n
+                    
     def residual(self, parameterValues):
         residuals = sp.array([])
         for model in self.models.values():
@@ -500,8 +494,14 @@ class CompositeModel:
         if parameterValues is None:
             parameterValues = self.theory.initialParameterValues
         residuals = self.residual(parameterValues)
-        return sum(residuals*residuals)
-        #return sum(sp.absolute(residuals))
+        cst = np.dot(residuals, residuals)
+        dataTotalNumber = self.dataTotalNumber()
+        dof = float(dataTotalNumber-len(parameterValues))
+        # Standard error of the regression 
+        # see parameter SER in 
+        # http://en.wikipedia.org/wiki/Linear_least_squares
+        ser = (cst/dof)**0.5
+        return cst, ser
     
     def SST(self, parameterValues=None):
         sst = 0.
@@ -550,7 +550,7 @@ class CompositeModel:
                 J = numpy.concatenate((J,model.jacobian(parameterValues)),1)
         return J
             
-    def bestFit(self,initialParameterValues=None,isJacobian=True):
+    def bestFit(self,initialParameterValues=None,isJacobian=False):
         if initialParameterValues is None:
             initialParameterValues = self.theory.initialParameterValues
         if isJacobian:

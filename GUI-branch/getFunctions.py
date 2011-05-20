@@ -4,7 +4,7 @@ def getFunctionNames(subDir='functions'):
     """
     get a dictionary where the keys 
     are the function names of defined functions 
-    and containt the whole pathname
+    and contains the whole pathname
     """
     functionDict = {}
     getPklFileNames = glob.glob(subDir+"/*.pkl")
